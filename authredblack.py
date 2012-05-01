@@ -1,21 +1,10 @@
 from collections import namedtuple
 import json
 
-
-# Okasaki method for red-black tree
 """
 This is based on the Persistent Authenticated Dictionary, and the
 Okasaki method for Red-Black trees.
-
-I tried to factor the red-black tree logic from the Merkle tree
-stuff as much as possible. This allows me to test the balancing behavior
-separately from the hash.
-
-The problem is I have to include this
-'recompute' function f as a parameter to all my red-black tree functino.
-
 """
-
 def AuthRedBlack(H = lambda _: ''):
     """
     Returns:
