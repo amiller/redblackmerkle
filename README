@@ -1,0 +1,6 @@
+Red-Black Merkle Tree
+
+A Persistent Authenticated Dictionary (PAD) [1] implemented using Okasaki-style red-black trees [2].
+
+[1] http://cs.brown.edu/people/aris/pubs/pad.pdf
+[2] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
