@@ -8,7 +8,7 @@ A demonstration of an Authenticated Datastructure [0] that provides the followin
     insert()
     delete() # not implemented yet
 
-In this implementation, each of these operations takes O(log N) time and requires O(N) storage. These operations also produce an O(log N) Verification Object (a path through a Merkle tree) that can be used by a client to verify the operation with O(log N) effort. The client is also only required to maintain O(1) state (specifically, the Merkle tree root hash).
+In this implementation, each of these operations takes O(log N) time and requires O(N) storage. These operations also each produce an O(log N) Verification Object (a path through a Merkle tree) that can be used by a client to verify the operation with O(log N) effort. The client is also only required to maintain O(1) state (specifically, the Merkle tree root hash).
 
 The application of this datastructure is to provide proofs-of-availability, that is, a measure of random access throughput for queries to this data structure. This could be used by a Cloud Storage provider to make claims about the fault tolerance of its storage layout, as in [1]: The Client issues an O(1) challenge <code>p</code> consisting of a random string. The Server responds to the challenge by finding a solution <code>q</code> such that using <code>q || p</code> as the seed to a PRF, a random sequential walk through <code>k</code> elements (accumulating a hash along the way) produces a final accumulated hash that's below a threshold (similar to the proof-of-work in Bitcoin [2]).
 
