@@ -66,27 +66,23 @@ def AuthRedBlack(H = lambda _: '', k=64):
         Returns:
             An interator of elements forming a proof object for a search
         """
-        if not D: raise StopIteration
+        if not D: return ()
         c, left, (k, dL, dR), right = D
-        yield c, (k, dL, dR)
-
         child = left if q <= k else right # Inner node
-        for c,kh in search(q, child):
-            yield c,kh
+        return ((c, (k, dL, dR)),) + search(q, child)
 
 
     def query(q, D):
-        proof = tuple(search(q, D))
+        proof = search(q, D)
         if not proof: return None, proof
         (c,(k, _, _)) = proof[-1]
         return k == q, proof
 
 
     def verify(q, d0, proof):
-        proof = tuple(proof)
         r = reconstruct(iter(proof))
         assert digest(r) == d0
-        assert proof == tuple(search(q, r))
+        assert proof == search(q, r)
         return True
 
 

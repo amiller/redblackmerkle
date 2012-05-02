@@ -7,7 +7,10 @@ from authredblack import AuthRedBlack
 
 
 def invariants(D):
-    # Proper search tree
+    # The following invariants hold at all times for the red-black search tree
+
+    # Our definition of a search tree: each inner node contains the largest
+    # value in its left subtree.
     def _greatest(D):
         if not D: return
         (c, a, y, b) = D
@@ -27,7 +30,8 @@ def invariants(D):
         _redparent(a, c == 'R')
         _redparent(b, c == 'R')
 
-    # Paths are balanced
+    # Paths are balanced if the number of black nodes along any simple path
+    # from this root to a leaf are the same
     def _paths_black(D):
         if not D: return 0
         (c, a, y, b) = D
@@ -38,7 +42,7 @@ def invariants(D):
         assert p == _paths_black(b)
         return p + (c == 'B')
 
-    # Digests are computed correctly
+    # Merkle tree digests must be computed correctly
     def _digests(D):
         if not D: return
         (c, a, (x, dL, dR), b) = D
@@ -62,7 +66,6 @@ def test_cases():
     R,B = 'RB'
     x,y,z = ((k, '', '') for k in 'xyz')
     a,b,c,d = ((B,(),(k, '', ''),()) for k in 'abcd')
-
 
     # Test cases from figure 1 in
     # http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
@@ -90,7 +93,7 @@ class RedBlackTest(unittest.TestCase):
 
     def test_degenerate(self):
         assert insert('a', ()) == ('B', (), ('a','',''), ())
-        assert tuple(search(0, ())) == ()
+        assert search(0, ()) == ()
         assert reconstruct(iter(())) == ()
         assert digest(()) == ''        
 
@@ -130,10 +133,10 @@ class RedBlackTest(unittest.TestCase):
         T = ()
         for i in range(0, 8, 2): T = insert(i, T)
         for i in (-1,1,3,5,7):
-            R = reconstruct(search(i, T))
+            R = reconstruct(iter(search(i, T)))
             invariants(T)
-        assert (tuple(search(i, insert(i, T))) == \
-                tuple(search(i, insert(i, R))))
+        assert (search(i, insert(i, T)) == 
+                search(i, insert(i, R)))
 
 
 class AuthRedBlackTest(unittest.TestCase):
@@ -154,13 +157,13 @@ class AuthRedBlackTest(unittest.TestCase):
         for i in range(0,10,3): T = insert(i, T)
         for i in range(1,11,3): T = insert(i, T)
         for i in range(2,12,3):
-            s = tuple(search(i, T))
+            s = search(i, T)
             r = reconstruct(iter(s))
             invariants(T)
-            assert tuple(search(i, r)) == tuple(search(i, T))
-            assert tuple(search(i, insert(i, r))) == tuple(search(i, insert(i, T)))
+            assert search(i, r) == search(i, T)
+            assert search(i, insert(i, r)) == search(i, insert(i, T))
             assert digest(insert(i, r)) == digest(insert(i, T))
-            d0 = digest(insert(i, T))
+
 
 
 if __name__ == '__main__':
