@@ -19,13 +19,6 @@ class AuthRedBlack():
         return self.H((c, k, dL, dR))
 
 
-    def tree_traversal(self, D):
-        """
-        Returns:
-            a steerable iterator that traverses the tree from the root down
-        """
-
-
     def search(self, q, D):
         """
         Search through the binary tree.
@@ -45,7 +38,7 @@ class AuthRedBlack():
         proof = self.search(q, D)
         if not proof: return None, proof
         (c,(k, _, _)) = proof[-1]
-        return k == q, proof
+        return k if k == q else None, proof
 
 
     def reconstruct(self, proof):
@@ -54,13 +47,12 @@ class AuthRedBlack():
         given a proof object consisting of the colors and values from
         the path.
 
-        Invariant:
+        Correctness invariant:
             forall q and D:
                  R = reconstruct(search(q, D))
-
                  assert digest(D) == digest(R)
                  assert search(q, D) == search(q, R)
-                 assert insert(q, D) == insert(q, R)
+                 assert digest(insert(q, D)) == digest(insert(q, R))
         """
         proof = iter(proof)
         try:
@@ -83,13 +75,42 @@ class AuthRedBlack():
                 return (c, (), (k, dL, dR), child)
 
 
-    def rehash(self, D):
-        # Recompute the hashes for each node, but only if the children
-        # are available. Otherwise, we assume the current value is correct.
-        c, L, (k, dL, dR), R = D
-        if L: dL = self.digest(L)
-        if R: dR = self.digest(R)
-        return (c, L, (k, dL, dR), R)
+    def insert(self, q, D):
+        """
+        Insert element x into the tree.
+        Exceptions:
+            AssertionError if x is already in the tree.
+        """
+        balance, rehash = self.balance, self.rehash
+        x = (q, '', '')
+
+        def ins(D):
+            # Trivial case
+            if not D: return ('B', (), x, ())
+
+            # Element already exists (insert is idempotent)
+            c, a, y, b = D
+            assert q != y[0]
+
+            # Leaf node found (this will become the parent)
+            if q < y[0] and not a:
+                return balance(rehash(('R', ins(a), x, make_black(D))))
+
+            if q > y[0] and not b: 
+                return balance(rehash(('R', make_black(D), y, ins(b))))
+
+            # Otherwise recurse
+            if q < y[0]: return balance((c, ins(a), y, b))
+            if q > y[0]: return balance((c, a, y, ins(b)))
+
+        make_black = lambda (c,a,y,b): ('B',a,y,b)
+        return rehash(make_black(ins(D)))
+
+
+    def delete(self, q, D):
+        """
+        """
+        raise NotImplemented
 
 
     def balance(self, D):
@@ -122,42 +143,10 @@ class AuthRedBlack():
                            D)
 
 
-    def insert(self, q, D):
-        """
-        Insert element x into the tree.
-        Exceptions:
-            AssertionError if x is already in the tree.
-        """
-        balance, rehash = self.balance, self.rehash
-        x = (q, '', '')
-
-        def ins(D):
-            # Trivial case
-            if not D: return ('B', (), x, ())
-
-            # Element already exists (insert is idempotent)
-            c, a, y, b = D
-            assert q != y[0]
-
-            # Leaf node found (this will become the parent)
-            if q < y[0] and not a:
-                return balance(rehash(('R', ins(a), x, make_black(D))))
-
-            if q > y[0] and not b: 
-                return balance(rehash(('R', make_black(D), y, ins(b))))
-
-            # Otherwise recurse
-            if q < y[0]: return balance((c, ins(a), y, b))
-            if q > y[0]: return balance((c, a, y, ins(b)))
-
-        def make_black(D):
-            (c, a, y, b) = D
-            return ('B', a, y, b)
-
-        return rehash(make_black(ins(D)))
-
-
-    def delete(self, q, D):
-        """
-        """
-        raise NotImplemented
+    def rehash(self, D):
+        # Recompute the hashes for each node, but only if the children
+        # are available. Otherwise, we assume the current value is correct.
+        c, L, (k, dL, dR), R = D
+        if L: dL = self.digest(L)
+        if R: dR = self.digest(R)
+        return (c, L, (k, dL, dR), R)

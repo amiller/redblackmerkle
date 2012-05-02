@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 import proofofwork; reload(proofofwork)
-from proofofwork import digest, search, insert, reconstruct, balance, verify
+from proofofwork import digest, search, insert, reconstruct, balance
 from proofofwork import respond, verify_response, do_work, verify_work, H
 from proofofwork import MerkleSampler, verify_random
 import unittest
@@ -116,6 +116,7 @@ def test_speed():
         times.append((t1-t0)/iters)
         print N, (t1-t0)/iters
     return x, Ns, times
+test_speed()
         
 
 values = range(N)

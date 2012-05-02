@@ -126,7 +126,7 @@ class RedBlackTest(unittest.TestCase):
             invariants(D)
             d0 = digest(D)
             for i in range(n):
-                assert query(i, D)[0] == (i in ref)
+                assert (query(i, D)[0] == i) == (i in ref)
 
     def test_insert_reconstruct_search(self):
         T = ()
