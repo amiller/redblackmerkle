@@ -26,5 +26,5 @@ Illustrations
 - Authenticated insertion/balancing (album) http://imgur.com/a/KNeq5#0
 
 - Teaser Image
-- 
+
 <img src="http://i.imgur.com/aFCLo.png" width="400"/>
