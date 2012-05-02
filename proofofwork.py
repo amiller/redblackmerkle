@@ -45,7 +45,7 @@ class MerkleSampler():
         # i = len(array). Add (v,i) to the tree.
         i, proof, _ = self.query(v)
         N = len(self.array)
-        assert i is None, "Trying to insert duplicate %s" % k
+        assert i is None, "Trying to insert duplicate %s" % v
         self.D = insert((v,N), self.D)
         self.array.append(v)
         return proof, N

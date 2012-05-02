@@ -47,17 +47,17 @@ class TestUniform(unittest.TestCase):
     pass
 
 
-N = 100
+N = 1000
 sampler = MerkleSampler()
-
 values = range(N)
+table = {}
 random.shuffle(values)
 for v in values: 
     table[H(v)] = v
     sampler.insert(H(v))
 
 while True:
-    threshold = 1<<(256-8)
+    threshold = 1<<(256-6)
     k = 128
     d0 = sampler.digest()
     iv = H(hexlify(os.urandom(20)))
@@ -68,7 +68,6 @@ while True:
         break
 
 def test_uniform(N=N, iters=10000):
-
     histogram = np.zeros(N)
     global realrandom
     realrandom = np.zeros(N)
@@ -84,6 +83,50 @@ def test_uniform(N=N, iters=10000):
     realrandom = sorted(realrandom) / np.sum(realrandom)
 
     return histogram
+
+import time
+def test_speed():
+    global times, Ns, inserts, sampler
+    max_exp = 20
+    x = np.arange(2,max_exp)
+    #Ns = 2**x
+    Ns = 100*x
+    values = range(2**max_exp)
+    sampler = MerkleSampler()
+    random.shuffle(values)
+    total = 0
+    times = []
+    inserts = []
+    R = random.Random(os.urandom(20))
+    for N in Ns:
+        t0 = time.clock()
+        for i in range(total,N):
+            v = values[i]
+            table[H(v)] = v
+            sampler.insert(H(v))
+        t1 = time.clock()
+        inserts += (t1-t0)/(N-total)
+        print N, (t1-t0)/(N-total)
+        total = N
+        iters = 1000000
+        t0 = time.clock()
+        for i in range(iters):
+            sampler.random(R.random())
+        t1 = time.clock()
+        times.append((t1-t0)/iters)
+        print N, (t1-t0)/iters
+    return x, Ns, times
+test_speed()
+        
+
+values = range(N)
+sampler = MerkleSampler()
+table = {}
+random.shuffle(values)
+for v in values: 
+    table[H(v)] = v
+    sampler.insert(H(v))
+    
 
 hist = test_uniform()
 
