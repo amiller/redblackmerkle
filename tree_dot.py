@@ -70,7 +70,7 @@ for i in (5,3,7,9,11):
 
 
 tree2png('dots/test_reconstruct_0.png', D)
-r = reconstruct(search(10, D))
+r = reconstruct(iter(search(10, D)))
 tree2png('dots/test_reconstruct_r0.png', r)
 tree2png('dots/test_reconstruct_1.png', insert(10, D))
 tree2png('dots/test_reconstruct_r1.png', insert(10, r))

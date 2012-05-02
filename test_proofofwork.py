@@ -42,16 +42,6 @@ for i in range(100):
     assert verify_response(sampler.digest(), iv, proof, data, N) == acc
 
 
-while True:
-    threshold = 1<<(256-2)
-    k = 128
-    d0 = sampler.digest()
-    iv = H(hexlify(os.urandom(20)))
-    acc, proofs, N = do_work(sampler, iv, k, table.get)
-    if long(acc,16) < threshold:
-        print acc
-        assert verify_work(d0, proofs, acc, N, k, threshold)
-        break
 
 class TestUniform(unittest.TestCase):
     pass
@@ -62,9 +52,22 @@ sampler = MerkleSampler()
 
 values = range(N)
 random.shuffle(values)
-for v in values: sampler.insert(v)
+for v in values: 
+    table[H(v)] = v
+    sampler.insert(H(v))
 
-def test_uniform(N=N, iters=1000):
+while True:
+    threshold = 1<<(256-8)
+    k = 128
+    d0 = sampler.digest()
+    iv = H(hexlify(os.urandom(20)))
+    acc, proofs, N = do_work(sampler, iv, k, table.get)
+    if long(acc,16) < threshold:
+        print acc
+        assert verify_work(d0, proofs, acc, N, k, threshold)
+        break
+
+def test_uniform(N=N, iters=10000):
 
     histogram = np.zeros(N)
     global realrandom
@@ -74,7 +77,7 @@ def test_uniform(N=N, iters=1000):
         iv = H(hexlify(os.urandom(20)))
         acc, proof, data, N = respond(iv, sampler, table.get)
         (_, ((k,_), _, _)) = proof[-1]
-        histogram[k] += 1
+        histogram[table[k]] += 1
         realrandom[np.random.randint(N)] += 1
 
     histogram = sorted(histogram) / np.sum(histogram)

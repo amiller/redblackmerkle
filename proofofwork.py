@@ -65,7 +65,7 @@ class MerkleSampler():
         N = len(self.array)
         i = random_index(seed, N)
         v = self.array[i]
-        proof = search((v,0), self.D)
+        proof = search((v,i), self.D)
         return v, proof, N
 
     def delete(self, v):
