@@ -48,11 +48,6 @@ node [fontname="Arial"];
     return layer % (''.join(edges(D)))
     
 
-D = ()
-for i in (5,3,7,9,11):
-    D = insert(i, D)
-    tree2png('dots/test_reconstruct_i%d.png'%i, D)
-
 
 def dot2png(dot):
     from subprocess import PIPE
@@ -68,9 +63,14 @@ def tree2png(filename, D):
     open(filename, 'w').write(dot2png(tree2dot(D)))
 
 
+D = ()
+for i in (5,3,7,9,11):
+    D = insert(i, D)
+    tree2png('dots/test_reconstruct_i%d.png'%i, D)
+
+
 tree2png('dots/test_reconstruct_0.png', D)
 r = reconstruct(search(10, D))
 tree2png('dots/test_reconstruct_r0.png', r)
 tree2png('dots/test_reconstruct_1.png', insert(10, D))
 tree2png('dots/test_reconstruct_r1.png', insert(10, r))
-

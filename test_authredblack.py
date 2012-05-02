@@ -6,34 +6,6 @@ import authredblack; reload(authredblack)
 from authredblack import AuthRedBlack
 
 
-def query(q, D):
-    proof = search(q, D)
-    if not proof: return None, proof
-    (c,k) = proof[-1]
-    return k[0] == q, proof
-
-
-ARB = AuthRedBlack()
-digest = ARB['digest']
-search = ARB['search']
-insert = ARB['insert']
-reconstruct = ARB['reconstruct']
-balance = ARB['balance']
-
-
-R,B = 'RB'
-x,y,z = ((k, '', '') for k in 'xyz')
-a,b,c,d = ((B,(),(k, '', ''),()) for k in 'abcd')
-
-# Test cases from figure 1 in
-# http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
-test_case_W = (B,(R,(R,a,x,b),y,c),z,d)
-test_case_N = (B,(R,a,x,(R,b,y,c)),z,d)
-test_case_S = (B,a,x,(R,(R,b,y,c),z,d))
-test_case_E = (B,a,x,(R,b,y,(R,c,z,d)))
-correct_result = (R,(B,a,x,b),y,(B,c,z,d))
-
-
 def invariants(D):
     # Proper search tree
     def _greatest(D):
@@ -85,23 +57,41 @@ def invariants(D):
     _digests(D)
 
 
+def test_cases():
+    global correct_result, test_case_W, test_case_N, test_case_S, test_case_E
+    R,B = 'RB'
+    x,y,z = ((k, '', '') for k in 'xyz')
+    a,b,c,d = ((B,(),(k, '', ''),()) for k in 'abcd')
+
+
+    # Test cases from figure 1 in
+    # http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
+    test_case_W = (B,(R,(R,a,x,b),y,c),z,d)
+    test_case_N = (B,(R,a,x,(R,b,y,c)),z,d)
+    test_case_S = (B,a,x,(R,(R,b,y,c),z,d))
+    test_case_E = (B,a,x,(R,b,y,(R,c,z,d)))
+    correct_result = (R,(B,a,x,b),y,(B,c,z,d))
+
+
 class RedBlackTest(unittest.TestCase):
     """
     The tree.insert, search, 
     """
     def setUp(self):
-        global digest, search, insert, reconstruct, balance
+        global digest, search, insert, reconstruct, balance, verify
         ARB = AuthRedBlack()
         digest = ARB['digest']
         search = ARB['search']
         insert = ARB['insert']
         reconstruct = ARB['reconstruct']
         balance = ARB['balance']
+        verify = ARB['verify']
+        query = ARB['query']
 
     def test_degenerate(self):
         assert insert('a', ()) == ('B', (), ('a','',''), ())
-        assert search(0, ()) == ()
-        assert reconstruct(()) == ()
+        assert tuple(search(0, ())) == ()
+        assert reconstruct(iter(())) == ()
         assert digest(()) == ''        
 
     def test_simple_cases(self):
@@ -112,9 +102,9 @@ class RedBlackTest(unittest.TestCase):
 
     def _test_reconstruct(self, D, n):
         for q in range(n):
-            proof = search(q, D)
-            r = reconstruct(proof)
-            assert proof == search(q, r)
+            found, proof = query(q, D)
+            r = reconstruct(iter(proof))
+            if found: assert proof == tuple(search(q, r))
 
     def test_sequential(self):
         D = ()
@@ -131,8 +121,10 @@ class RedBlackTest(unittest.TestCase):
             D = insert(i, D)
             ref.add(i)
             invariants(D)
+            d0 = digest(D)
             for i in range(n):
                 assert query(i, D)[0] == (i in ref)
+                assert verify(i, d0, search(i, D))
 
     def test_insert_reconstruct_search(self):
         T = ()
@@ -140,12 +132,13 @@ class RedBlackTest(unittest.TestCase):
         for i in (-1,1,3,5,7):
             R = reconstruct(search(i, T))
             invariants(T)
-            assert search(i, insert(i, T)) == search(i, insert(i, R))
+        assert (tuple(search(i, insert(i, T))) == \
+                tuple(search(i, insert(i, R))))
 
 
 class AuthRedBlackTest(unittest.TestCase):
     def setUp(self):
-        global digest, search, insert, reconstruct, balance
+        global digest, search, insert, reconstruct, balance, verify
         H = lambda (c, k, dL, dR): SHA256.new(json.dumps((c,k,dL,dR))).hexdigest()
         ARB = AuthRedBlack(H)
         digest = ARB['digest']
@@ -153,20 +146,31 @@ class AuthRedBlackTest(unittest.TestCase):
         insert = ARB['insert']
         reconstruct = ARB['reconstruct']
         balance = ARB['balance']
+        verify = ARB['verify']
+        query = ARB['query']
 
     def test_auth(self):
         T = ()
         for i in range(0,10,3): T = insert(i, T)
         for i in range(1,11,3): T = insert(i, T)
         for i in range(2,12,3):
-            s = search(i, T)
-            r = reconstruct(s)
+            s = tuple(search(i, T))
+            r = reconstruct(iter(s))
             invariants(T)
-            assert search(i, r) == search(i, T)
-            assert search(i, insert(i, r)) == search(i, insert(i, T))
+            assert tuple(search(i, r)) == tuple(search(i, T))
+            assert tuple(search(i, insert(i, r))) == tuple(search(i, insert(i, T)))
             assert digest(insert(i, r)) == digest(insert(i, T))
             d0 = digest(insert(i, T))
 
 
 if __name__ == '__main__':
     unittest.main()
+
+    ARB = AuthRedBlack()
+    digest = ARB['digest']
+    search = ARB['search']
+    insert = ARB['insert']
+    reconstruct = ARB['reconstruct']
+    balance = ARB['balance']
+    verify = ARB['verify']
+    query = ARB['query']

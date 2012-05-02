@@ -2,10 +2,14 @@ from collections import namedtuple
 import json
 
 """
-This is based on the Persistent Authenticated Dictionary, and the
-Okasaki method for Red-Black trees.
+An authenticated search structure [1] using Okasaki-style red-black trees [2].
+
+[1] http://cs.brown.edu/people/aris/pubs/pad.pdf
+[2] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
+
 """
-def AuthRedBlack(H = lambda _: ''):
+
+def AuthRedBlack(H = lambda _: '', k=64):
     """
     Returns:
         dict with functions
@@ -59,17 +63,31 @@ def AuthRedBlack(H = lambda _: ''):
 
     def search(q, D):
         """
-        Return a proof object for a search, consisting of the 
-        values of the nodes visited during a binary search.
+        Returns:
+            An interator of elements forming a proof object for a search
         """
-        if not D: return ()
+        if not D: raise StopIteration
+        c, left, (k, dL, dR), right = D
+        yield c, (k, dL, dR)
 
-        c, left, k, right = D
-        if not left and not right: # Leaf node
-            return ((c,k),)
+        child = left if q <= k else right # Inner node
+        for c,kh in search(q, child):
+            yield c,kh
 
-        child = left if q <= k[0] else right # Inner node
-        return ((c,k),) + search(q, child)
+
+    def query(q, D):
+        proof = tuple(search(q, D))
+        if not proof: return None, proof
+        (c,(k, _, _)) = proof[-1]
+        return k == q, proof
+
+
+    def verify(q, d0, proof):
+        proof = tuple(proof)
+        r = reconstruct(iter(proof))
+        assert digest(r) == d0
+        assert proof == tuple(search(q, r))
+        return True
 
 
     def reconstruct(proof):
@@ -82,16 +100,24 @@ def AuthRedBlack(H = lambda _: ''):
             forall q and D:
             search(1, reconstruct(search(q, D))) == search(q, D)
         """
-        if not proof: return ()
+        try:
+            c,(k,hL,hR) = proof.next()
+        except StopIteration:
+            return ()
 
-        (c, k), tail = proof[0], proof[1:]
-        if not tail:
-            return rehash((c, (), k, ()))
+        child = reconstruct(proof)
+        if not child:
+            assert hL == hR == ''
+            return (c, (), (k, hL, hR), ())
 
-        child = reconstruct(tail)
-        _, _, _k, _ = child
-        return rehash((c, child, k, ()) if _k[0] <= k[0] else 
-                      (c, (), k, child))
+        else:
+            _, _, (_k, _, _), _R = child
+            if _k <= k:
+                assert hL == digest(child)
+                return (c, child, (k, hL, hR), ())
+            else:
+                assert hR == digest(child)
+                return (c, (), (k, hL, hR), child)                    
 
 
     def insert(q, D):
@@ -110,7 +136,7 @@ def AuthRedBlack(H = lambda _: ''):
             c, a, y, b = D
             if q == y[0]: return D
 
-            # Leaf node found (this will become the father)
+            # Leaf node found (this will become the parent)
             if q < y[0] and not a:
                 return balance(rehash(('R', ins(a), x, make_black(D))))
 
@@ -131,34 +157,6 @@ def AuthRedBlack(H = lambda _: ''):
     def delete(q, D):
         """
         """
-        pass
+        raise NotImplemented
 
     return locals()
-
-
-# Now we begin with the Merkle tree specialization
-H = lambda x: SHA256.new(x).hexdigest()
-
-
-def verify_search(q, d0, proof):
-    r = reconstruct(proof)
-    assert digest(r) == d0
-    assert search(q, r) == proof
-    return True
-
-
-def refresh(q, d0, proof):
-    # Return the digest for the new tree
-    r = reconstruct(proof)
-    assert digest(r) == d0
-    assert search(q, r) == proof
-    return digest(insert(q, r))
-
-
-def verify_update(q, d0, d1, proof):
-    assert refresh(q, d0, proof) == d1
-
-
-def update(u, D):
-    proof = search(u, D)
-    return insert(u, D)
