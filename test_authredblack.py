@@ -74,14 +74,14 @@ def test_cases():
     test_case_S = (B,a,x,(R,(R,b,y,c),z,d))
     test_case_E = (B,a,x,(R,b,y,(R,c,z,d)))
     correct_result = (R,(B,a,x,b),y,(B,c,z,d))
-
+test_cases()
 
 class RedBlackTest(unittest.TestCase):
     """
     The tree.insert, search, 
     """
     def setUp(self):
-        global digest, search, insert, reconstruct, balance, verify
+        global digest, search, insert, reconstruct, balance, verify, query
         ARB = AuthRedBlack()
         digest = ARB['digest']
         search = ARB['search']
@@ -121,8 +121,9 @@ class RedBlackTest(unittest.TestCase):
         ref = set()
         for _ in range(n):
             i = random.randint(0,n)
-            D = insert(i, D)
-            ref.add(i)
+            if not i in ref:
+                D = insert(i, D)
+                ref.add(i)
             invariants(D)
             d0 = digest(D)
             for i in range(n):

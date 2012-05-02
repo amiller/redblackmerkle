@@ -130,7 +130,7 @@ def AuthRedBlack(H = lambda _: '', k=64):
 
             # Element already exists (insert is idempotent)
             c, a, y, b = D
-            if q == y[0]: return D
+            assert q != y[0]
 
             # Leaf node found (this will become the parent)
             if q < y[0] and not a:
