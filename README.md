@@ -22,6 +22,9 @@ The implementation of this datastructure consists of a) an array, and b) a Red-B
 
 Illustrations
 =============
-http://imgur.com/a/KNeq5#0
 
-<img src="http://i.imgur.com/aFCLo.png"/>
+- Authenticated insertion/balancing (album) http://imgur.com/a/KNeq5#0
+
+- Teaser Image
+- 
+<img src="http://i.imgur.com/aFCLo.png" width="400"/>
