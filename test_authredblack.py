@@ -81,15 +81,14 @@ class RedBlackTest(unittest.TestCase):
     The tree.insert, search, 
     """
     def setUp(self):
-        global digest, search, insert, reconstruct, balance, verify, query
+        global digest, search, insert, reconstruct, balance, query
         ARB = AuthRedBlack()
-        digest = ARB['digest']
-        search = ARB['search']
-        insert = ARB['insert']
-        reconstruct = ARB['reconstruct']
-        balance = ARB['balance']
-        verify = ARB['verify']
-        query = ARB['query']
+        digest = ARB.digest
+        search = ARB.search
+        insert = ARB.insert
+        reconstruct = ARB.reconstruct
+        balance = ARB.balance
+        query = ARB.query
 
     def test_degenerate(self):
         assert insert('a', ()) == ('B', (), ('a','',''), ())
@@ -128,7 +127,6 @@ class RedBlackTest(unittest.TestCase):
             d0 = digest(D)
             for i in range(n):
                 assert query(i, D)[0] == (i in ref)
-                assert verify(i, d0, search(i, D))
 
     def test_insert_reconstruct_search(self):
         T = ()
@@ -142,16 +140,15 @@ class RedBlackTest(unittest.TestCase):
 
 class AuthRedBlackTest(unittest.TestCase):
     def setUp(self):
-        global digest, search, insert, reconstruct, balance, verify
+        global digest, search, insert, reconstruct, balance
         H = lambda (c, k, dL, dR): SHA256.new(json.dumps((c,k,dL,dR))).hexdigest()
         ARB = AuthRedBlack(H)
-        digest = ARB['digest']
-        search = ARB['search']
-        insert = ARB['insert']
-        reconstruct = ARB['reconstruct']
-        balance = ARB['balance']
-        verify = ARB['verify']
-        query = ARB['query']
+        digest = ARB.digest
+        search = ARB.search
+        insert = ARB.insert
+        reconstruct = ARB.reconstruct
+        balance = ARB.balance
+        query = ARB.query
 
     def test_auth(self):
         T = ()
@@ -171,10 +168,9 @@ if __name__ == '__main__':
     unittest.main()
 
     ARB = AuthRedBlack()
-    digest = ARB['digest']
-    search = ARB['search']
-    insert = ARB['insert']
-    reconstruct = ARB['reconstruct']
-    balance = ARB['balance']
-    verify = ARB['verify']
-    query = ARB['query']
+    digest = ARB.digest
+    search = ARB.search
+    insert = ARB.insert
+    reconstruct = ARB.reconstruct
+    balance = ARB.balance
+    query = ARB.query

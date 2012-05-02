@@ -12,13 +12,14 @@ from authredblack import AuthRedBlack
 
 H = lambda *args: SHA256.new(json.dumps(args)).hexdigest()
 
+
 ARB = AuthRedBlack(H)
-digest = ARB['digest']
-search = ARB['search']
-insert = ARB['insert']
-reconstruct = ARB['reconstruct']
-balance = ARB['balance']
-verify = ARB['verify']
+digest = ARB.digest
+search = ARB.search
+insert = ARB.insert
+reconstruct = ARB.reconstruct
+balance = ARB.balance
+query = ARB.query
 
 
 # Replace with a CSPRF
@@ -27,7 +28,7 @@ def random_index(seed, N):
 
 
 def verify_random(d0, seed, proof, N):
-    D = reconstruct(iter(proof))
+    D = reconstruct(proof)
     assert(H(digest(D),N) == d0)
     (_, ((v,i), _, _)) = proof[-1]
     assert i == random_index(seed, N)
@@ -85,7 +86,7 @@ def respond(acc, sampler, lookup):
 
 
 def verify_response(d0, acc, proof, data, N):
-    r = reconstruct(iter(proof))
+    r = reconstruct(proof)
     assert H(digest(r),N) == d0
     i = random_index(acc, N)
     v = H(data)

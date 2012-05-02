@@ -1,6 +1,3 @@
-from collections import namedtuple
-import json
-
 """
 An authenticated search structure [1] using Okasaki-style red-black trees [2].
 
@@ -9,29 +6,93 @@ An authenticated search structure [1] using Okasaki-style red-black trees [2].
 
 """
 
-def AuthRedBlack(H = lambda _: '', k=64):
-    """
-    Returns:
-        dict with functions
-    """    
-    def digest(D):
+class AuthRedBlack():
+    def __init__(self, H = lambda _: ''):
+        self.H = H
+
+
+    def digest(self, D):
         # The hash corresponding to a node is the Hash function applied
         # to the concatenation its children's hashes and its own value
         if not D: return ''
         c, _, (k, dL, dR), _ = D
-        return H((c, k, dL, dR))
+        return self.H((c, k, dL, dR))
 
 
-    def rehash(D):
+    def tree_traversal(self, D):
+        """
+        Returns:
+            a steerable iterator that traverses the tree from the root down
+        """
+
+
+    def search(self, q, D):
+        """
+        Search through the binary tree.
+
+        Returns:
+            an array containing the values at each node visited
+        """
+        result = []
+        while D:
+            c, L, (k, dL, dR), R = D
+            result.append((c, (k, dL, dR)))
+            D = L if q <= k else R
+        return tuple(result)
+
+
+    def query(self, q, D):
+        proof = self.search(q, D)
+        if not proof: return None, proof
+        (c,(k, _, _)) = proof[-1]
+        return k == q, proof
+
+
+    def reconstruct(self, proof):
+        """
+        Reconstruct a partial view of a tree (a path from root to leaf)
+        given a proof object consisting of the colors and values from
+        the path.
+
+        Invariant:
+            forall q and D:
+                 R = reconstruct(search(q, D))
+
+                 assert digest(D) == digest(R)
+                 assert search(q, D) == search(q, R)
+                 assert insert(q, D) == insert(q, R)
+        """
+        proof = iter(proof)
+        try:
+            (c, (k, dL, dR)) = proof.next()
+        except StopIteration:
+            return ()
+
+        child = self.reconstruct(proof)
+        if not child:
+            assert dL == dR == ''
+            return (c, (), (k, dL, dR), ())
+
+        else:
+            _, _, (_k, _, _), _ = child
+            if _k <= k:
+                assert dL == self.digest(child)
+                return (c, child, (k, dL, dR), ())
+            else:
+                assert dR == self.digest(child)
+                return (c, (), (k, dL, dR), child)
+
+
+    def rehash(self, D):
         # Recompute the hashes for each node, but only if the children
         # are available. Otherwise, we assume the current value is correct.
         c, L, (k, dL, dR), R = D
-        if L: dL = digest(L)
-        if R: dR = digest(R)
+        if L: dL = self.digest(L)
+        if R: dR = self.digest(R)
         return (c, L, (k, dL, dR), R)
 
 
-    def balance(D):
+    def balance(self, D):
         # This is the simplest way I could think of simulating the 
         # pattern matching from Haskell. The point is to be able to
         # use the very elegant statement from the Okasaki paper [1]
@@ -54,74 +115,20 @@ def AuthRedBlack(H = lambda _: '', k=64):
                 return (R,(B,a,(x,m,n),b),(y,'',''),(B,c,(z,o,p),d))
             else: return None
 
-        return rehash(match(B,(R,(R,a,(x,m,n),b),(y,_,o),c),(z,_,p),d) or
-                      match(B,(R,a,(x,m,_),(R,b,(y,n,o),c)),(z,_,p),d) or
-                      match(B,a,(x,m,_),(R,(R,b,(y,n,o),c),(z,_,p),d)) or
-                      match(B,a,(x,m,_),(R,b,(y,n,_),(R,c,(z,o,p),d))) or
-                      D)
+        return self.rehash(match(B,(R,(R,a,(x,m,n),b),(y,_,o),c),(z,_,p),d) or
+                           match(B,(R,a,(x,m,_),(R,b,(y,n,o),c)),(z,_,p),d) or
+                           match(B,a,(x,m,_),(R,(R,b,(y,n,o),c),(z,_,p),d)) or
+                           match(B,a,(x,m,_),(R,b,(y,n,_),(R,c,(z,o,p),d))) or
+                           D)
 
 
-    def search(q, D):
-        """
-        Returns:
-            An interator of elements forming a proof object for a search
-        """
-        if not D: return ()
-        c, left, (k, dL, dR), right = D
-        child = left if q <= k else right # Inner node
-        return ((c, (k, dL, dR)),) + search(q, child)
-
-
-    def query(q, D):
-        proof = search(q, D)
-        if not proof: return None, proof
-        (c,(k, _, _)) = proof[-1]
-        return k == q, proof
-
-
-    def verify(q, d0, proof):
-        r = reconstruct(iter(proof))
-        assert digest(r) == d0
-        assert proof == search(q, r)
-        return True
-
-
-    def reconstruct(proof):
-        """
-        Reconstruct a partial view of a tree (a path from root to leaf)
-        given a proof object consisting of the colors and values from
-        the path.
-
-        Invariant:
-            forall q and D:
-            search(1, reconstruct(search(q, D))) == search(q, D)
-        """
-        try:
-            c,(k,hL,hR) = proof.next()
-        except StopIteration:
-            return ()
-
-        child = reconstruct(proof)
-        if not child:
-            assert hL == hR == ''
-            return (c, (), (k, hL, hR), ())
-
-        else:
-            _, _, (_k, _, _), _R = child
-            if _k <= k:
-                assert hL == digest(child)
-                return (c, child, (k, hL, hR), ())
-            else:
-                assert hR == digest(child)
-                return (c, (), (k, hL, hR), child)                    
-
-
-    def insert(q, D):
+    def insert(self, q, D):
         """
         Insert element x into the tree.
         Exceptions:
             AssertionError if x is already in the tree.
         """
+        balance, rehash = self.balance, self.rehash
         x = (q, '', '')
 
         def ins(D):
@@ -150,9 +157,7 @@ def AuthRedBlack(H = lambda _: '', k=64):
         return rehash(make_black(ins(D)))
 
 
-    def delete(q, D):
+    def delete(self, q, D):
         """
         """
         raise NotImplemented
-
-    return locals()

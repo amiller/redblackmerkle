@@ -108,7 +108,7 @@ def test_speed():
         inserts += (t1-t0)/(N-total)
         print N, (t1-t0)/(N-total)
         total = N
-        iters = 1000000
+        iters = 10000
         t0 = time.clock()
         for i in range(iters):
             sampler.random(R.random())
@@ -116,7 +116,6 @@ def test_speed():
         times.append((t1-t0)/iters)
         print N, (t1-t0)/iters
     return x, Ns, times
-test_speed()
         
 
 values = range(N)
