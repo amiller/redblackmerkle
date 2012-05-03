@@ -8,11 +8,12 @@ from authredblack import AuthRedBlack
 
 H = lambda (c, k, hL, hR): SHA256.new(json.dumps((c,k,hL,hR))).hexdigest()[:4]
 ARB = AuthRedBlack(H)
-digest = ARB['digest']
-search = ARB['search']
-insert = ARB['insert']
-reconstruct = ARB['reconstruct']
-balance = ARB['balance']
+digest = ARB.digest
+search = ARB.search
+insert = ARB.insert
+reconstruct = ARB.reconstruct
+balance = ARB.balance
+query = ARB.query
 
 
 def tree2dot(D):
