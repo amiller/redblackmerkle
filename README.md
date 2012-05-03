@@ -8,7 +8,7 @@ This is a demonstration of an Authenticated Data Structure* [0] that provides th
     insert()          
     delete()          # not implemented yet
 
-Authenticated Data Structures are typically used in protocols between three parties: 1) the trusted Source, which creates the data and publishes a digest; 2) the untrusted Server, which maintains a copy of the data and responds to queries; and 3) the Client, which queries the server and verifies the responses against the known digest.
+Authenticated Data Structures are typically used in protocols between three parties: 1) the trusted Source, which creates the data and publishes a digest; 2) the untrusted Server, which maintains a copy of the data and responds to queries; and 3) the Client, which verifies the Server's responses against the known digest.
 
 In this implementation, the data structure requires O(N) storage and each operation takes O(log N) time. These operations also each produce an O(log N) Verification Object (a path through a Merkle tree) that can be used by a Client to verify the operation with O(log N) effort. The Client is only required to maintain O(1) state (specifically, the Merkle tree root hash).
 
@@ -21,7 +21,7 @@ This implementation consists of a) an array, and b) a Red-Black binary search tr
 
 - sampler.py: <code>MerkleSampler</code> additionally supports get_random() by combining the <code>AuthRedBlackTree</code> with an array
 
-- proofofwork.py: uses the MerkleSampler
+- proofofwork.py: uses the <code>MerkleSampler</code> to produce proofs-of-availability to uniformly random queries
 
 
 Illustrations
