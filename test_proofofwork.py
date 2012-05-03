@@ -6,7 +6,7 @@ import random
 import time
 
 import proofofwork; reload(proofofwork)
-from proofofwork import do_work, verify_work
+from proofofwork import do_work, verify_work, sampler_worker
 from proofofwork import select, verify_query, H, MS, PRF
 
 insert = MS.insert
@@ -49,31 +49,15 @@ def build_cheating_table(DA, lookup):
         v = A[i]
         data = lookup(v)
         _, VO = query(v, DA)
-        table[i] = (VO, data)
+        table[i] = (data, VO)
 
+    
     print 'Built table'
+    def get_random_element(seed):
+        i = PRF(seed).randint(0,N-1)
+        return table[i]
 
-    def do_work(iv, k, _, __):
-        acc = iv
-        walk = []
-        for _ in range(k):
-            i = PRF(acc).randint(0,N-1)
-            VO, data = table[i]
-            walk.insert(0, (acc, VO, data))
-            acc = H((acc, VO, data))
-        return acc, walk
-
-    def verify_work(d0, acc, walk, k):
-        (_,N) = d0
-        assert len(walk) == k
-        for (prev_acc, VO, data) in walk:
-            i = PRF(prev_acc).randint(0, N-1)
-            assert (VO, data)  == table[i]
-            assert acc == H((prev_acc, VO, data))
-            acc = prev_acc
-        return True
-
-    return do_work
+    return get_random_element
 
 
 class ProofOfWorkTest(unittest.TestCase):
@@ -91,36 +75,38 @@ class ProofOfWorkTest(unittest.TestCase):
     def test_cheat_at_work(self):
         # Build the lookup table
         DA, table = self.DA, self.table
-        cheat_at_work = build_cheating_table(DA, table.get)
+
+        normal_worker = sampler_worker(DA, table.get)
+        cheating_worker = build_cheating_table(DA, table.get)
 
         ivs = [H(os.urandom(20)) for _ in xrange(1000)]
         k = 16
         d0 = digest(DA)
 
-        def verify(do_work):
+        def verify(worker):
             for iv in ivs:
-                acc, PN = do_work(iv, k, DA, table.get)
+                acc, PN = do_work(iv, k, worker)
                 assert verify_work(d0, acc, PN, k)
 
-        def timeit(do_work):
+        def timeit(worker):
             t0 = time.clock()
             for iv in ivs:
-                acc, PN = do_work(iv, k, DA, table.get)
+                acc, PN = do_work(iv, k, worker)
             t1 = time.clock()
             return (t1-t0)/len(ivs)
 
-        print "Normal work (s):", timeit(do_work)
-        print "Faster work (s):", timeit(cheat_at_work)
+        print "Normal work (s):", timeit(normal_worker)
+        print "Faster work (s):", timeit(cheating_worker)
 
 
     def test_work(self):
-        DA, table = self.DA, self.table
-        d0 = MS.digest(DA)
+        worker = sampler_worker(self.DA, self.table.get)
+        d0 = MS.digest(self.DA)
         k = 32
 
         for i in range(100):
             iv = H(os.urandom(20))
-            acc, PN = do_work(iv, k, DA, table.get)
+            acc, PN = do_work(iv, k, worker)
             assert verify_work(d0, acc, PN, k)
 
 
@@ -128,18 +114,18 @@ class ProofOfWorkTest(unittest.TestCase):
         """
         Simulate the behavior of a Bitcoin miner.
         """
-        DA, table = self.DA, self.table
+        worker = sampler_worker(self.DA, self.table.get)
+        d0 = MS.digest(self.DA)
         k = 32
-        d0 = digest(DA)
 
         # Produce a hash with two 0's in the front
         threshold = 1<<(256-8)
         while True:
             iv = H(os.urandom(20))
-            acc, PN = do_work(iv, k, DA, table.get)
+            acc, VO = do_work(iv, k, worker)
             if long(acc,16) < threshold:
                 print 'Found winning block:', acc
-                assert verify_work(d0, acc, PN, k)
+                assert verify_work(d0, acc, VO, k)
                 break
 
 

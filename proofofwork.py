@@ -40,9 +40,17 @@ select() and verify_select():
     where d0 = digest(DA)
 """
 
+def sampler_worker(DA, lookup):
+    N = len(DA[1])
+    def get_random_element(seed):
+        i = PRF(seed).randint(0, N-1)
+        element, VO = select(i, DA)
+        data = lookup(element)
+        return data, VO
+    return get_random_element
 
 
-def do_work(iv, k, DA, lookup):
+def do_work(iv, k, get_random_element):
     """
     1. Initialize an accumulator with 'iv'. 
     2. Using the current accumulator value as the as the seed to a PRF, 
@@ -53,18 +61,13 @@ def do_work(iv, k, DA, lookup):
     The final value of the accumulator is the proof-of-work, which can be 
     compared to a difficulty threshold, a la Bitcoin.
     """
-    N = len(DA[1])
     acc = iv
     walk = []  # Collect the verification objects in reverse order
     for _ in range(k):
-        # Draw a random element (and corresponding VO)
-        i = PRF(acc).randint(0, N-1)
-        element, VO = select(i, DA)
-        data = lookup(element)
-        walk.insert(0, (acc, VO, data))
-
-        # Accumulate the data from this iteration, including the tree path
-        acc = H((acc, VO, data))
+        # Draw a random element (and its corresponding proof object)
+        data, VO = get_random_element(acc)
+        walk.insert(0, (acc, data, VO))
+        acc = H((acc, data, VO))
 
     return (acc, walk)
 
@@ -78,19 +81,44 @@ def verify_work(d0, acc, walk, k):
     with the final accumulator value. This means a malicious prover would
     have to expend O(2^k * log N) effort to make the verifier expend
     O(k * log n). (This is a claim about DoS resistance)
-
-    A verifier with O(N) of state (such as another worker) can verify the
-    solution for theirself using O(k * log N) effort and only O(1)
-    communication (just the iv). However it may still be preferable to
-    require an O(k) proof object for DoS resistance, as described above.
     """
     assert len(walk) == k
     (_, N) = d0
-    for (prev_acc, VO, data) in walk:
+    for (prev_acc, data, VO) in walk:
         i = PRF(prev_acc).randint(0, N-1)
         v = H(data)
         assert verify_query(d0, v, i, VO)
-        assert acc == H((prev_acc, VO, data))
+        assert acc == H((prev_acc, data, VO))
         acc = prev_acc
 
     return True
+
+
+def random_oracle_O1_verifier(get_random_element):
+    """
+    A verifier with O(N) of state (such as another worker) can verify the
+    solution for theirself using O(k * log N) effort and only O(1)
+    communication (just the iv). 
+    """
+    def verify_work(d0, acc, iv, k):
+        (_acc, _) = do_work(iv, k, get_random_element)
+        assert _acc == acc
+        return True
+    return verify_work    
+
+
+def random_oracle_Ok_verifier(get_random_element):
+    """
+    However it is still be preferable to require an O(k) verification
+    object (just the k accumulator values) for DoS resistance, as 
+    described above.
+    """
+    def verify_work(d0, acc, walk, k):
+        (_,N) = d0
+        assert len(walk) == k
+        for prev_acc in walk:
+            data, VO = get_random_element(prev_acc)
+            assert acc == H((prev_acc, data, VO))
+            acc = prev_acc
+        return True
+
