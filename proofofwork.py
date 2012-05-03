@@ -50,19 +50,6 @@ def do_work(iv, k, (D,A), lookup):
 
     The final value of the accumulator is the proof-of-work, which can be 
     compared to a difficulty threshold, a la Bitcoin.
-
-    A verifier with only O(1) of state (the root hash) can verify the work
-    using the O(k * log N) verification object.
-
-    The prover walks the verifier backwards through the work, beginning 
-    with the final accumulator value. This means a malicious prover would
-    have to expend O(2^k * log N) effort to make the verifier expend
-    O(k * log n). (This is a claim about DoS resistance)
-
-    A verifier with O(N) of state (such as another worker) can verify the
-    solution for theirself using O(k * log N) effort and only O(1)
-    communication (just the iv). However it may still be preferable to
-    require an O(k) proof object for DoS resistance, as described above.
     """
     acc = iv
     walk = []  # Collect the verification objects in reverse order
@@ -80,10 +67,21 @@ def do_work(iv, k, (D,A), lookup):
 
 def verify_work(d0, acc, (walk, N), k):
     """
-    Walk backwards through the work using the O(k * log N) verification 
-    object.
+    A verifier with only O(1) of state (the root hash) can verify the work
+    using the O(k * log N) verification object.
+
+    The prover walks the verifier backwards through the work, beginning 
+    with the final accumulator value. This means a malicious prover would
+    have to expend O(2^k * log N) effort to make the verifier expend
+    O(k * log n). (This is a claim about DoS resistance)
+
+    A verifier with O(N) of state (such as another worker) can verify the
+    solution for theirself using O(k * log N) effort and only O(1)
+    communication (just the iv). However it may still be preferable to
+    require an O(k) proof object for DoS resistance, as described above.
     """
     assert len(walk) == k
+
     for (prev_acc, VO, data) in walk:
         v = H(data)
         assert verify_random(d0, v, prev_acc, (VO,N))
