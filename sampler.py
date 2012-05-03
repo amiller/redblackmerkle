@@ -1,6 +1,7 @@
 from authredblack import AuthRedBlack
 import json
 import random
+import math
 def random_index(seed, N):
     return random.Random(seed).randint(0,N-1)
 
@@ -34,6 +35,7 @@ class MerkleSampler():
         return None, (P, len(A))
 
     def verify_query(self, d0, v, (P,N)):
+        assert len(P) < 4*math.ceil(math.log(N,2))
         R = self.ARB.reconstruct(P)
         assert self.H(self.ARB.digest(R), N) == d0
         assert P == self.ARB.search((v,0), R)
@@ -74,6 +76,7 @@ class MerkleSampler():
               digest(insert(v, DA))
         """
         digest, insert = self.ARB.digest, self.ARB.insert
+        assert len(P) < 4*math.ceil(math.log(N,2))
         R = self.ARB.reconstruct(P)
         assert self.H(digest(R), N) == d0
         return self.H(digest(insert((v,N), R)), N+1)
