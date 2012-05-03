@@ -42,3 +42,4 @@ Illustrations
 [3] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps<br>
 [4] http://cs.brown.edu/people/aris/pubs/pad.pdf<br>
 [5] http://stackoverflow.com/questions/5682218/data-structure-insert-remove-contains-get-random-element-all-at-o1<br>
+[6] http://www.cse.msstate.edu/~ramkumar/gw-102.pdf
