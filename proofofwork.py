@@ -59,8 +59,8 @@ def do_work(iv, k, (D,A), lookup):
         data = lookup(element)
         walk.insert(0, (acc, VO, data))
 
-        # Add the data for this iteration into the accumulator
-        acc = H((acc, data))
+        # Accumulate the data from this iteration, including the tree path
+        acc = H((acc, VO, data))
 
     return acc, (walk, len(A))
 
@@ -85,7 +85,7 @@ def verify_work(d0, acc, (walk, N), k):
     for (prev_acc, VO, data) in walk:
         v = H(data)
         assert verify_random(d0, v, prev_acc, (VO,N))
-        assert acc == H((prev_acc, data))
+        assert acc == H((prev_acc, VO, data))
         acc = prev_acc
 
     return True
