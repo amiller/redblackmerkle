@@ -19,7 +19,7 @@ This implementation consists of a) an array, and b) a Red-Black binary search tr
 
 - authredblack.py: <code>AuthRedBlackTree</code> is an Authenticated Set based on a Red-Black tree, supporting query(), insert(), and delete()
 
-- sampler.py: <code>MerkleSampler</code> additionally supports get_random() by combines the <code>AuthRedBlackTree</code> with an array
+- sampler.py: <code>MerkleSampler</code> additionally supports get_random() by combining the <code>AuthRedBlackTree</code> with an array
 
 - proofofwork.py: uses the MerkleSampler
 
