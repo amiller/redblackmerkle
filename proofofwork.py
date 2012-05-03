@@ -26,7 +26,7 @@ verify_random = MS.verify_random
 get_random() and verify_random():
     A random elements is selected from a sampler DA as follows:
 
-        (element, _), (VO, _) = get_random(seed, DA)
+        element, VO = get_random(seed, DA)
 
     where VO is the O(log N) verification object (a trace through the
     Merkle tree)
