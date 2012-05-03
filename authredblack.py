@@ -1,8 +1,15 @@
 """
-An authenticated search structure [1] using Okasaki-style red-black trees [2].
+Andrew Miller - May 2012
 
-[1] http://cs.brown.edu/people/aris/pubs/pad.pdf
-[2] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
+
+An Authenticated Set using supporting query(), insert(), and delete() in
+O(log N) time with O(N) storage, as well as verifications in O(log N)
+with O(1) state.
+
+This implementation uses Red-Black Merkle trees as described in [1] and in 
+particular using the Okasaki technique for balancing [2].
+
+
 
 Type definitions and common notations:
 

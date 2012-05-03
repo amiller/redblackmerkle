@@ -32,7 +32,7 @@ class SamplerTest(unittest.TestCase):
 
         for _ in range(100):
             seed = os.urandom(20)
-            (v,i), PN = get_random(seed, DA)
+            v, PN = get_random(seed, DA)
             d0 = digest(DA)
             verify_random(d0, v, seed, PN)
 
@@ -45,17 +45,17 @@ for v in values:
 
 def test_uniform(iters=10000):
     global realrandom, histogram
-    histogram = np.zeros(N)
-    realrandom = np.zeros(N)
+    histogram = N*[0]
+    realrandom = N*[0]
 
     for _ in range(iters):
         seed = H(os.urandom(20))
-        (v,i), _ = get_random(seed, DA)
+        v, _ = get_random(seed, DA)
         histogram[v] += 1
-        realrandom[np.random.randint(N)] += 1
+        realrandom[random.randint(0,N-1)] += 1
 
-    histogram = sorted(histogram) / np.sum(histogram)
-    realrandom = sorted(realrandom) / np.sum(realrandom)
+    histogram = sorted(histogram)   # / sum(histogram)
+    realrandom = sorted(realrandom) # / sum(realrandom)
 test_uniform()
 
 
@@ -63,7 +63,7 @@ import time
 def test_speed():
     global times, Ns, inserts, sampler
     max_exp = 20
-    x = np.arange(2,max_exp)
+    x = range(2,max_exp)
     #Ns = 2**x
     Ns = 100*x
     values = range(2**max_exp)

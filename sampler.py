@@ -1,3 +1,57 @@
+"""
+Andrew Miller - May 2012
+
+
+An Authenticated Set supporting query(), insert(), delete(), and get_random()
+all in O(log N) time with O(N) storage, as well as verification in O(log N)
+time with O(1) state.
+
+This uses the Red-Black Merkle tree but with an additional array that is used
+for selecting an element at random (with uniform probability of selectin each
+element).
+
+
+Type definitions and common notations:
+
+DA:
+    A merkle sampler contains a tree and an array:
+
+        (D, A) = DA
+
+    where D is a red-black merkle tree and A is an array. There is a one-to-
+    one mapping between elements in the tree and elements in the array
+
+        (v,i)        is in the tree D if-and-only-if
+        A[i] = v
+
+    The empty sampler is represented by
+
+        (), []
+
+
+(P,N):
+    A verification object for sampler operations.
+
+    P: is a Verification Object (a trace through the merkle tree)
+    N: The number of elements in the set (i.e., len(A))
+
+    The number of elements N is needed to verify each operation, so it is 
+    included in the digest of the sampler:
+
+        (D,A) = DA
+        digest(DA) == H(digest(D), len(A))
+
+    The verification object can also be used by simulate_search to compute
+    the resulting digest for a tree:
+
+        forall v, DA:
+            (P,N) = query(v, DA)
+            d0 = digest(DA)
+
+            assert digest(insert(v, DA)) == \
+                   digest(simulate_insert(d0, v, (P,N)))
+"""
+
 from authredblack import AuthRedBlack
 import json
 import random
@@ -35,7 +89,7 @@ class MerkleSampler():
         return None, (P, len(A))
 
     def verify_query(self, d0, v, (P,N)):
-        assert len(P) < 4*math.ceil(math.log(N,2))
+        assert len(P) <= 4*math.ceil(math.log(N+1,2))
         R = self.ARB.reconstruct(P)
         assert self.H(self.ARB.digest(R), N) == d0
         assert P == self.ARB.search((v,0), R)
@@ -45,13 +99,14 @@ class MerkleSampler():
         """Draw a element at random (uniformly) and provide a Verification
         Object that can be used to verify it.
         Returns:
-            (v,i), (P,N)
-            where v is the element and i is its index in the array
+            v, (P,N)
+            where v is the element, P is the proof object for search(v, D)
+            and N is the number of elements in the set
         """
         i = self.prf(seed).randint(0,len(A)-1)
         v = A[i]
         _, PN = self.query(v, (D,A))
-        return (v,i), PN
+        return v, PN
 
     def verify_random(self, d0, v, seed, (P,N)):
         self.verify_query(d0, v, (P,N))
@@ -76,7 +131,7 @@ class MerkleSampler():
               digest(insert(v, DA))
         """
         digest, insert = self.ARB.digest, self.ARB.insert
-        assert len(P) < 4*math.ceil(math.log(N,2))
+        assert len(P) <= 4*math.log(N+1,2)
         R = self.ARB.reconstruct(P)
         assert self.H(digest(R), N) == d0
         return self.H(digest(insert((v,N), R)), N+1)
