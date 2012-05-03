@@ -50,9 +50,8 @@ def do_work(iv, k, (D,A), lookup):
 
 def verify_work(d0, acc, (walk, N), k, threshold=1<<(256-16)):
     """
-    First compare the threshold, then walk backwards.
-    Walk backwards through the work using the O(k log N) 
-    verification object.
+    First compare the threshold, then walk backwards through 
+    the work using the O(k log N) verification object.
     """
     assert long(acc, 16) < threshold
     assert len(walk) == k
