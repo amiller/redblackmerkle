@@ -34,8 +34,8 @@ Illustrations
 <img src="http://i.imgur.com/aFCLo.png" width="400"/>
 
 
-[0] http://cs.brown.edu/research/pubs/pdfs/2003/Tamassia-2003-ADS.pdf<br>
-[1] http://www.rsa.com/rsalabs/staff/bios/kbowers/publications/RAFT.pdf<br>
+[0] <a href="http://cs.brown.edu/research/pubs/pdfs/2003/Tamassia-2003-ADS.pdf">Authenticated Data Structures.  Roberto Tamassia. 2003</a><br>
+[1] <a href="http://www.rsa.com/rsalabs/staff/bios/kbowers/publications/RAFT.pdf">How to Tell if Your Cloud Files are Vulnerable to Drive Crashes. Bowers, Dijk, Juels, Oprea, and Rivest. 2011</a><br>
 [2] http://bitcoin.org/bitcoin.pdf<br>
 [3] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps<br>
 [4] http://cs.brown.edu/people/aris/pubs/pad.pdf<br>
