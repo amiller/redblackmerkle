@@ -23,6 +23,8 @@ This implementation consists of a) an array, and b) a Red-Black binary search tr
 
 - proofofwork.py: uses the <code>MerkleSampler</code> to produce proofs-of-availability to uniformly random queries
 
+There are other authenticated data structures that could be used instead of the Red-Black tree, resulting in different complexity tradeoffs. See [6] for the most recent table of the available structures. The Red-Black tree requires the simplest assumptions (Collision Resistant Hash Functions).
+
 
 Illustrations
 =============
