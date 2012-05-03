@@ -56,9 +56,9 @@ def verify_work(d0, acc, (walk, N), k, threshold=1<<(256-16)):
     assert long(acc, 16) < threshold
     assert len(walk) == k
 
-    for (prev_acc, P, data) in walk:
+    for (prev_acc, VO, data) in walk:
         v = H(data)
-        assert verify_random(d0, v, prev_acc, (P,N))
+        assert verify_random(d0, v, prev_acc, (VO,N))
         assert acc == H((prev_acc, data))
         acc = prev_acc
 
