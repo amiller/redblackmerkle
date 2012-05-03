@@ -1,5 +1,6 @@
 """
-Andrew Miller - May 2012
+Andrew Miller <amiller@cs.ucf.edu>
+May 2012
 
 An alternate proof-of-work scheme for Bitcoin. Instead of merely computing
 hashes, miners compete by demonstrating high-throughput access to their

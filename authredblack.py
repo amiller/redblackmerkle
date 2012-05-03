@@ -1,5 +1,6 @@
 """
-Andrew Miller - May 2012
+Andrew Miller <amiller@cs.ucf.edu>
+May 2012
 
 
 An Authenticated Set using supporting query(), insert(), and delete() in
