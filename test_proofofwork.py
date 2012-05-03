@@ -26,7 +26,7 @@ for i in range(100):
     iv = H(hexlify(os.urandom(20)))
     acc, PN = do_work(iv, k, DA, table.get)
     d0 = MS.digest(DA)
-    assert verify_work(d0, acc, PN, k, 1<<256)
+    assert verify_work(d0, acc, PN, k)
 
 
 N = 1000
@@ -41,6 +41,7 @@ for v in values:
     DA = insert(H(v), DA)
 
 while True:
+    # Produce a hash with two 0's in the front
     threshold = 1<<(256-8)
     k = 128
     d0 = digest(DA)
@@ -48,7 +49,7 @@ while True:
     acc, PN = do_work(iv, k, DA, table.get)
     if long(acc,16) < threshold:
         print acc
-        assert verify_work(d0, acc, PN, k, threshold)
+        assert verify_work(d0, acc, PN, k)
         break
 
         

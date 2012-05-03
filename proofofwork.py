@@ -56,8 +56,8 @@ def do_work(iv, k, (D,A), lookup):
 
     The prover walks the verifier backwards through the work, beginning 
     with the final accumulator value. This means a malicious prover would
-    have to expend O(2^k * log N) effort to make the verifier expend 
-    O(k log n). (This is a claim about DoS resistance)
+    have to expend O(2^k * log N) effort to make the verifier expend
+    O(k * log n). (This is a claim about DoS resistance)
 
     A verifier with O(N) of state (such as another worker) can verify the
     solution for theirself using O(k * log N) effort and only O(1)
@@ -78,14 +78,12 @@ def do_work(iv, k, (D,A), lookup):
     return acc, (walk, len(A))
 
 
-def verify_work(d0, acc, (walk, N), k, threshold=1<<(256-16)):
+def verify_work(d0, acc, (walk, N), k):
     """
-    First compare the threshold, then walk backwards through 
-    the work using the O(k log N) verification object.
+    Walk backwards through the work using the O(k * log N) verification 
+    object.
     """
-    assert long(acc, 16) < threshold
     assert len(walk) == k
-
     for (prev_acc, VO, data) in walk:
         v = H(data)
         assert verify_random(d0, v, prev_acc, (VO,N))
