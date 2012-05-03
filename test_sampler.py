@@ -2,7 +2,7 @@ import os
 import unittest
 import sampler; reload(sampler)
 from sampler import MerkleSampler
-import random as rnd
+import random
 from Crypto.Hash import SHA256
 
 H = lambda x: SHA256.new(x).hexdigest()
@@ -11,7 +11,7 @@ ARB = MS.ARB
 digest = MS.digest
 insert = MS.insert
 query = MS.query
-random = MS.random
+get_random = MS.get_random
 verify_random = MS.verify_random
 
 class SamplerTest(unittest.TestCase):
@@ -19,7 +19,7 @@ class SamplerTest(unittest.TestCase):
         N = 100
         DA = (),[]
         values = range(N)
-        rnd.shuffle(values)
+        random.shuffle(values)
         for v in values:
             index, _ = query(v, DA)
             if index is None: DA = insert(v, DA)
@@ -28,14 +28,14 @@ class SamplerTest(unittest.TestCase):
 
         for _ in range(100):
             seed = os.urandom(20)
-            (v,i), PN = random(seed, DA)
+            (v,i), PN = get_random(seed, DA)
             d0 = digest(DA)
             verify_random(d0, v, seed, PN)
 
 N = 100
 DA = (), []
 values = range(N)
-rnd.shuffle(values)
+random.shuffle(values)
 for v in values: 
     DA = insert(v, DA)
 
@@ -46,7 +46,7 @@ def test_uniform(iters=10000):
 
     for _ in range(iters):
         seed = H(os.urandom(20))
-        (v,i), _ = random(seed, DA)
+        (v,i), _ = get_random(seed, DA)
         histogram[v] += 1
         realrandom[np.random.randint(N)] += 1
 
@@ -64,11 +64,11 @@ def test_speed():
     Ns = 100*x
     values = range(2**max_exp)
     DA = (), []
-    rnd.shuffle(values)
+    random.shuffle(values)
     total = 0
     times = []
     inserts = []
-    R = rnd.Random(os.urandom(20))
+    R = random.Random(os.urandom(20))
     for N in Ns:
         t0 = time.clock()
         for v in values[total:N]:
@@ -80,7 +80,7 @@ def test_speed():
         iters = 10000
         t0 = time.clock()
         for i in range(iters):
-            random(R.random(), DA)
+            get_random(R.random(), DA)
         t1 = time.clock()
         times.append((t1-t0)/iters)
         print 'draw random:', N, (t1-t0)/iters

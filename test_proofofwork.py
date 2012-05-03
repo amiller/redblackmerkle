@@ -1,13 +1,17 @@
 import os
 from binascii import hexlify, unhexlify
 import numpy as np
-from sampler import MerkleSampler
+import unittest
+import random
 
 import proofofwork; reload(proofofwork)
 from proofofwork import do_work, verify_work
-from proofofwork import insert, digest, query, random, verify_random, H, MS
-import unittest
-import random as rnd
+from proofofwork import get_random, verify_random, H, MS
+
+insert = MS.insert
+query = MS.query
+digest = MS.digest
+
 
 table = {}
 k = 64
@@ -26,13 +30,12 @@ for i in range(100):
 
 
 N = 1000
-sampler = MerkleSampler()
 values = range(N)
 table = {}
 k = 64
 DA = (), []
 
-rnd.shuffle(values)
+random.shuffle(values)
 for v in values: 
     table[H(v)] = v
     DA = insert(H(v), DA)
