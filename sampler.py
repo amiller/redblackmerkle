@@ -24,6 +24,12 @@ DA:
         (v,i)        is in the tree D if-and-only-if
         A[i] = v
 
+    The number of elements N is needed to verify each operation, so it is 
+    included in the digest of the sampler
+
+        (D,A) = DA
+        digest(DA) == H(digest(D), len(A))
+
     The empty sampler is represented by
 
         (), []
@@ -34,12 +40,6 @@ DA:
 
     P: is a Verification Object (a trace through the merkle tree)
     N: The number of elements in the set (i.e., len(A))
-
-    The number of elements N is needed to verify each operation, so it is 
-    included in the digest of the sampler:
-
-        (D,A) = DA
-        digest(DA) == H(digest(D), len(A))
 
     The verification object can also be used by simulate_search to compute
     the resulting digest for a tree:
