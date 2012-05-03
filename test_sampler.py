@@ -10,6 +10,7 @@ MS = MerkleSampler(H)
 ARB = MS.ARB
 digest = MS.digest
 insert = MS.insert
+simulate_insert = MS.simulate_insert
 query = MS.query
 get_random = MS.get_random
 verify_random = MS.verify_random
@@ -21,8 +22,11 @@ class SamplerTest(unittest.TestCase):
         values = range(N)
         random.shuffle(values)
         for v in values:
-            index, _ = query(v, DA)
-            if index is None: DA = insert(v, DA)
+            index, PN = query(v, DA)
+            d0 = digest(DA)
+            if index is None: 
+                DA = insert(v, DA)
+                assert digest(DA) == simulate_insert(d0, v, PN)
             index, _ = query(v, DA)
             assert index is not None
 
@@ -85,7 +89,7 @@ def test_speed():
         times.append((t1-t0)/iters)
         print 'draw random:', N, (t1-t0)/iters
     return x, Ns, times
-test_speed()
+#test_speed()
 
 
 if __name__ == '__main__':
