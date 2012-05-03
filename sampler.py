@@ -57,8 +57,6 @@ from authredblack import AuthRedBlack
 import json
 import random
 import math
-def random_index(seed, N):
-    return random.Random(seed).randint(0,N-1)
 
 
 class MerkleSampler():
