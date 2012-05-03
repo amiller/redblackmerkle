@@ -35,11 +35,22 @@ P:
     A Verification Object. This is just a trace through the merkle tree. It's
     a tuple of node values, of the form:
 
-         (Color, Key, LeftDigiest, RightDigest) = P[0]
+         (Color, Key, LeftDigest, RightDigest) = P[0]
          abbreviated (c, k, dL, dR)
     
     where the first element is the root of the tree, and the last element
     is (_, Key, _, _) if Key was found in the tree.
+
+
+
+Correctness invariant:
+
+    forall q and D:
+        R = reconstruct(search(q, D))
+        assert digest(D) == digest(R)
+        assert search(q, D) == search(q, R)
+        assert digest(insert(q, D)) == digest(insert(q, R))
+
 """
 
 class AuthRedBlack():
@@ -82,13 +93,6 @@ class AuthRedBlack():
         Reconstruct a partial view of a tree (a path from root to leaf)
         given a proof object consisting of the colors and values from
         the path.
-
-        Correctness invariant:
-            forall q and D:
-                 R = reconstruct(search(q, D))
-                 assert digest(D) == digest(R)
-                 assert search(q, D) == search(q, R)
-                 assert digest(insert(q, D)) == digest(insert(q, R))
         """
         P = iter(P)
         try:
