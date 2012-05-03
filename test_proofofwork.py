@@ -7,7 +7,7 @@ import time
 
 import proofofwork; reload(proofofwork)
 from proofofwork import do_work, verify_work
-from proofofwork import get_random, verify_random, H, MS
+from proofofwork import select, verify_query, H, MS, PRF
 
 insert = MS.insert
 query = MS.query
@@ -31,8 +31,12 @@ def build_cheating_table(DA, lookup):
 
     TODO: Finish this note
 
-    However, this attempt at cheating still results in O(1)
-    verification of queries, the work with no additional cost.
+    However, this attempt at cheating still results in O(log N)
+    lookups, as shown in the construction of verify_query.
+
+    In other words if you have oracle access to select() then
+    you can build a verifier.
+
     -- So, why not just exercise the array?
     -- What about update costs?
     
@@ -44,8 +48,8 @@ def build_cheating_table(DA, lookup):
     for i in range(N):
         v = A[i]
         data = lookup(v)
-        _, (V0, _) = query(v, DA)
-        table[i] = (V0, data)
+        _, VO = query(v, DA)
+        table[i] = (VO, data)
 
     print 'Built table'
 
@@ -53,17 +57,18 @@ def build_cheating_table(DA, lookup):
         acc = iv
         walk = []
         for _ in range(k):
-            i = MS.prf(acc).randint(0,N-1)
+            i = PRF(acc).randint(0,N-1)
             VO, data = table[i]
             walk.insert(0, (acc, VO, data))
             acc = H((acc, VO, data))
-        return acc, (walk, N)
+        return acc, walk
 
-    def verify_work(d0, acc, (walk, N), k):
+    def verify_work(d0, acc, walk, k):
+        (_,N) = d0
         assert len(walk) == k
         for (prev_acc, VO, data) in walk:
-            v = H(data)
-            assert verify_random(d0, v, prev_acc, (VO,N))
+            i = PRF(prev_acc).randint(0, N-1)
+            assert (VO, data)  == table[i]
             assert acc == H((prev_acc, VO, data))
             acc = prev_acc
         return True

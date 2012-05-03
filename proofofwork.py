@@ -14,33 +14,35 @@ random element from the set.
 
 from sampler import MerkleSampler
 import json
+import random
 from Crypto.Hash import SHA256
 
-
+PRF = lambda seed: random.Random(seed)
 H = lambda x: SHA256.new(str(x)).hexdigest()
 MS = MerkleSampler(H)
-get_random = MS.get_random
-verify_random = MS.verify_random
+select = MS.select
+verify_query = MS.verify_query
 
 """
-get_random() and verify_random():
-    A random elements is selected from a sampler DA as follows:
+select() and verify_select():
+    A random element is selected from a sampler DA as follows:
 
-        element, VO = get_random(seed, DA)
+        i = randint(0, N-1)
+        element, VO = select(i, DA)
 
     where VO is the O(log N) verification object (a trace through the
     Merkle tree)
 
     The selection can be verified in O(log N) worst-case time using:
     
-        verify_random(d0, element, seed, VO)
+        verify_query(d0, element, i, VO)
 
     where d0 = digest(DA)
 """
 
 
 
-def do_work(iv, k, (D,A), lookup):
+def do_work(iv, k, DA, lookup):
     """
     1. Initialize an accumulator with 'iv'. 
     2. Using the current accumulator value as the as the seed to a PRF, 
@@ -51,21 +53,23 @@ def do_work(iv, k, (D,A), lookup):
     The final value of the accumulator is the proof-of-work, which can be 
     compared to a difficulty threshold, a la Bitcoin.
     """
+    N = len(DA[1])
     acc = iv
     walk = []  # Collect the verification objects in reverse order
     for _ in range(k):
         # Draw a random element (and corresponding VO)
-        element, (VO, _) = get_random(acc, (D,A))
+        i = PRF(acc).randint(0, N-1)
+        element, VO = select(i, DA)
         data = lookup(element)
         walk.insert(0, (acc, VO, data))
 
         # Accumulate the data from this iteration, including the tree path
         acc = H((acc, VO, data))
 
-    return acc, (walk, len(A))
+    return (acc, walk)
 
 
-def verify_work(d0, acc, (walk, N), k):
+def verify_work(d0, acc, walk, k):
     """
     A verifier with only O(1) of state (the root hash) can verify the work
     using the O(k * log N) verification object.
@@ -81,10 +85,11 @@ def verify_work(d0, acc, (walk, N), k):
     require an O(k) proof object for DoS resistance, as described above.
     """
     assert len(walk) == k
-
+    (_, N) = d0
     for (prev_acc, VO, data) in walk:
+        i = PRF(prev_acc).randint(0, N-1)
         v = H(data)
-        assert verify_random(d0, v, prev_acc, (VO,N))
+        assert verify_query(d0, v, i, VO)
         assert acc == H((prev_acc, VO, data))
         acc = prev_acc
 

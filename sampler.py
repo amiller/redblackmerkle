@@ -29,14 +29,14 @@ DA:
     included in the digest of the sampler
 
         (D,A) = DA
-        digest(DA) == H(digest(D), len(A))
+        digest(DA) == digest(D), len(A))
 
     The empty sampler is represented by
 
         (), []
 
 
-(P,N):
+P:
     A verification object for sampler operations.
 
     P: is a Verification Object (a trace through the merkle tree)
@@ -45,12 +45,11 @@ DA:
     The verification object can also be used by simulate_search to compute
     the resulting digest for a tree:
 
-        forall v, DA:
-            (P,N) = query(v, DA)
-            d0 = digest(DA)
-
+        forall v, DA such that    P = query(v, DA)
+                           and    d0 = digest(DA)
+        then:
             assert digest(insert(v, DA)) == \
-                   digest(simulate_insert(d0, v, (P,N)))
+                   digest(simulate_insert(d0, v))
 """
 
 from authredblack import AuthRedBlack
@@ -60,59 +59,48 @@ import math
 
 
 class MerkleSampler():
-    def __init__(self, 
-                 digest=lambda _ : '',
-                 prf=lambda x: random.Random(x)):
-        self.H = lambda *args: digest(json.dumps(args))
-        self.ARB = AuthRedBlack(self.H)
-        self.prf = prf
+    def __init__(self, digest=lambda _ : ''):
+        self.ARB = AuthRedBlack(lambda *args: digest(json.dumps(args)))
 
     def digest(self, (D,A)):
         """The digest for the sampler includes the length of the array
         and the root hash of the tree
         """
-        return self.H(self.ARB.digest(D), len(A))
+        return (self.ARB.digest(D), len(A))
 
     def query(self, v, (D,A)):
         """Search for an element in the set
         Returns:
-            (i,    (P,N))    if v is in the set
-            (None, (P,N)) otherwise
+            (i,    P)    if v is in the set
+            (None, P) otherwise
             where P is the proof object for a search in D for (v,0)
-            and N is the number of elements in the array
         """
         P = self.ARB.search((v,0), D)
-        if not P: return None, (P, len(A))
+        if not P: return None, P
         (_, ((_v,i), _, _)) = P[-1]
-        if _v == v: return i, (P, len(A))
-        return None, (P, len(A))
+        if _v == v: return i, P
+        return None, P
 
-    def verify_query(self, d0, v, (P,N)):
+    def verify_query(self, d0, v, i, P):
+        _, N = d0
         assert len(P) <= 4*math.ceil(math.log(N+1,2))
+        (_, ((_vi), _, _)) = P[-1]
+        assert _vi == (v,i)
         R = self.ARB.reconstruct(P)
-        assert self.H(self.ARB.digest(R), N) == d0
+        assert (self.ARB.digest(R), N) == d0
         assert P == self.ARB.search((v,0), R)
         return True
 
-    def get_random(self, seed, (D,A)):
-        """Draw a element at random (uniformly) and provide a Verification
-        Object that can be used to verify it.
+    def select(self, i, (D,A)):
+        """Select the element at index location i (in 0..N-1) and return a 
+        Verification Object 
         Returns:
-            v, (P,N)
+            v, P
             where v is the element, P is the proof object for search(v, D)
-            and N is the number of elements in the set
         """
-        i = self.prf(seed).randint(0,len(A)-1)
         v = A[i]
-        _, PN = self.query(v, (D,A))
-        return v, PN
-
-    def verify_random(self, d0, v, seed, (P,N)):
-        self.verify_query(d0, v, (P,N))
-        i = self.prf(seed).randint(0,N-1)
-        (_, (_vi, _, _)) = P[-1]
-        assert _vi == (v,i)
-        return True
+        (_, P) = self.query(v, (D,A))
+        return v, P
 
     def insert(self, v, (D,A)):
         """Add a new element to the set
@@ -125,15 +113,16 @@ class MerkleSampler():
         A.append(v)
         return (D,A)
 
-    def simulate_insert(self, d0, v, (P,N)):
+    def simulate_insert(self, d0, v, P):
         """If digest(DA) == d0, then this function returns
               digest(insert(v, DA))
         """
         digest, insert = self.ARB.digest, self.ARB.insert
+        (_, N) = d0
         assert len(P) <= 4*math.log(N+1,2)
         R = self.ARB.reconstruct(P)
-        assert self.H(digest(R), N) == d0
-        return self.H(digest(insert((v,N), R)), N+1)
+        assert (digest(R), N) == d0
+        return (digest(insert((v,N), R)), N+1)
 
     def delete(self, v):
         raise NotImplemented
