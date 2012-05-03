@@ -1,7 +1,7 @@
 Red-Black Merkle Tree Sampler
 =============================
 
-This is a demonstration of an Authenticated Data Structure* [0] that provides the following operations:
+This is a demonstration of an Authenticated Data Structure [0] that provides the following operations:
 
     get_random()      # Select an element from the set at random (uniformly)
     query()           
