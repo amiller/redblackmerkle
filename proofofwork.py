@@ -9,13 +9,15 @@ database of 'unspent coins'.
 This is achieved by storing each 'unspent coin' as an element in a data-
 structure such that elements can be selected pseudo-randomly (uniformly)
 and verified against a known digest (i.e., the root hash of a Merkle tree).
+The work consists of k iterations where the data for each selected element
+is used to determine the selection for next iteration.
 
 The only way to build a machine that's good at producing this proof-of-work
-is to build a machine that is also efficient at checking for double-spends. 
-This will increase the decentralized of Bitcoin, since the cost of maintaining
-the 'unspent coins' database is currently "unpaid overtime", so-to-speak. 
-Many miners participate in pools without keeping around their own copy of the
-state, abdicating their roles as network participants.
+is to build a machine that's also efficient at validating transactions. This
+will increase the decentralized of Bitcoin, since the cost of maintaining
+the 'unspent coins' database is currently 'unpaid overtime', so-to-speak. In
+fact, many miners participate in pools without storing their own copy of the
+state, foregoing their ability to independently verify transactions.
 
 """
 
