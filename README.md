@@ -3,10 +3,10 @@ Red-Black Merkle Tree Sampler
 
 This is a demonstration of an Authenticated Data Structure [0] that provides the following operations:
 
-    get_random()      # Select an element from the set at random (uniformly)
-    query()           
-    insert()          
-    delete()          # not implemented yet
+    query()       # test an element for set membership
+    delete()      # not implemented yet
+    insert()
+    select()      # Select an element from the set using an index 0..N
 
 Authenticated Data Structures are typically used in protocols between three parties: 1) the trusted Source, which creates the data and publishes a digest; 2) the untrusted Server, which maintains a copy of the data and responds to queries; and 3) the Client, which verifies the Server's responses against the known digest.
 
@@ -19,7 +19,7 @@ This implementation consists of a) an array, and b) a Red-Black binary search tr
 
 - authredblack.py: <code>AuthRedBlackTree</code> is an Authenticated Set based on a Red-Black tree, supporting query(), insert(), and delete()
 
-- sampler.py: <code>MerkleSampler</code> additionally supports get_random() by combining the <code>AuthRedBlackTree</code> with an array
+- sampler.py: <code>MerkleSampler</code> additionally supports select() by combining the <code>AuthRedBlackTree</code> with an array
 
 - proofofwork.py: uses the <code>MerkleSampler</code> to produce proofs-of-availability to uniformly random queries
 

@@ -11,8 +11,8 @@ structure such that elements can be selected pseudo-randomly (uniformly)
 and verified against a known digest (i.e., the root hash of a Merkle tree).
 
 The only way to build a machine that's good at producing this proof-of-work
-is to build a machine that is also efficient at checking for double- spends. 
-This will increase the decentralized of Bitcoin, as the cost of maintaining 
+is to build a machine that is also efficient at checking for double-spends. 
+This will increase the decentralized of Bitcoin, since the cost of maintaining
 the 'unspent coins' database is currently "unpaid overtime", so-to-speak. 
 Many miners participate in pools without keeping around their own copy of the
 state, abdicating their roles as network participants.
