@@ -15,7 +15,7 @@ insert = MS.insert
 simulate_insert = MS.simulate_insert
 query = MS.query
 select = MS.select
-verify_query = MS.verify_query
+verify = MS.verify
 
 class SamplerTest(unittest.TestCase):
     def test_sampler(self):

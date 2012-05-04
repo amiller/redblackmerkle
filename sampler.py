@@ -7,9 +7,8 @@ An Authenticated Set supporting query(), insert(), delete(), and get_random()
 all in O(log N) time with O(N) storage, as well as verification in O(log N)
 time with O(1) state.
 
-This uses the Red-Black Merkle tree but with an additional array that is used
-for selecting an element at random (with uniform probability of selectin each
-element).
+This is based on the  Red-Black Merkle tree, but with an additional array that
+can be used to select random elements.
 
 
 Type definitions and common notations:
@@ -81,19 +80,9 @@ class MerkleSampler():
         if _v == v: return i, P
         return None, P
 
-    def verify_query(self, d0, v, i, P):
-        _, N = d0
-        assert len(P) <= 4*math.ceil(math.log(N+1,2))
-        (_, ((_vi), _, _)) = P[-1]
-        assert _vi == (v,i)
-        R = self.ARB.reconstruct(P)
-        assert (self.ARB.digest(R), N) == d0
-        assert P == self.ARB.search((v,0), R)
-        return True
-
     def select(self, i, (D,A)):
         """Select the element at index location i (in 0..N-1) and return a 
-        Verification Object 
+        Verification Object
         Returns:
             v, P
             where v is the element, P is the proof object for search(v, D)
@@ -112,6 +101,15 @@ class MerkleSampler():
         D = self.ARB.insert((v,len(A)), D)
         A.append(v)
         return (D,A)
+
+    def verify(self, d0, v, i, P):
+        _, N = d0
+        assert len(P) <= 4*math.ceil(math.log(N+1,2))
+        (_, ((_vi), _, _)) = P[-1]
+        assert _vi == (v,i)
+        R = self.ARB.reconstruct(P)
+        assert (i, P) == self.query(v, (R, None))
+        return True
 
     def simulate_insert(self, d0, v, P):
         """If digest(DA) == d0, then this function returns
