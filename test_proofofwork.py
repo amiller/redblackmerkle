@@ -7,7 +7,7 @@ import time
 
 import proofofwork; reload(proofofwork)
 from proofofwork import do_work, verify_work
-from proofofwork import select, verify, H, MS, PRF, blackbox_O1_query_verifier
+from proofofwork import select, verify, H, MS, PRF
 
 insert = MS.insert
 query = MS.query

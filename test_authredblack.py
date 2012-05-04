@@ -15,11 +15,11 @@ def invariants(D):
         if not D: return
         (c, a, y, b) = D
         if a and b:
-            if isinstance(y, tuple): assert _greatest(a)[0] == y[0] 
-            else: assert _greatest(a) == y
+            if isinstance(y, tuple): assert _greatest(a)[0] < y[0] 
+            else: assert _greatest(a) < y
             return _greatest(b)
         else:
-            assert not a and not b
+            #assert not a and not b
             return y
 
     # No red node has a red parent
@@ -35,9 +35,6 @@ def invariants(D):
     def _paths_black(D):
         if not D: return 0
         (c, a, y, b) = D
-        if not a and not b: 
-            assert c == 'B'
-            return 1
         p = _paths_black(a)
         assert p == _paths_black(b)
         return p + (c == 'B')
@@ -47,11 +44,7 @@ def invariants(D):
         if not D: return
         (c, a, (x, dL, dR), b) = D
         if a: assert dL == digest(a)
-        else: assert not dL
-        if b: 
-            if dR != digest(b): print dR, digest(b)
-            assert dR == digest(b)
-        else: assert not dR
+        if b: assert dR == digest(b)
         _digests(a)
         _digests(b)
 
@@ -64,7 +57,7 @@ def invariants(D):
 def test_cases():
     global correct_result, test_case_W, test_case_N, test_case_S, test_case_E
     R,B = 'RB'
-    x,y,z = ((k, '', '') for k in 'xyz')
+    x,y,z = ((k, '*', '*') for k in 'xyz')
     a,b,c,d = ((B,(),(k, '', ''),()) for k in 'abcd')
 
     # Test cases from figure 1 in
@@ -94,7 +87,7 @@ class RedBlackTest(unittest.TestCase):
         assert insert('a', ()) == ('B', (), ('a','',''), ())
         assert search(0, ()) == ()
         assert reconstruct(iter(())) == ()
-        assert digest(()) == ''        
+        assert digest(()) == ''
 
     def test_simple_cases(self):
         assert balance(test_case_W) == correct_result
@@ -161,7 +154,6 @@ class AuthRedBlackTest(unittest.TestCase):
             assert search(i, r) == search(i, T)
             assert search(i, insert(i, r)) == search(i, insert(i, T))
             assert digest(insert(i, r)) == digest(insert(i, T))
-
 
 
 if __name__ == '__main__':

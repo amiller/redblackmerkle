@@ -96,8 +96,8 @@ class MerkleSampler():
         """
         P = self.ARB.search((v,0), D)
         if not P: return None, P
-        (_, ((_v,i), _, _)) = P[-1]
-        if _v == v: return i, P
+        for (_, ((_v,i), _, _)) in P[::-1]:
+            if _v == v: return i, P
         return None, P
 
     def insert(self, v, (D,A)):
@@ -114,11 +114,12 @@ class MerkleSampler():
     def verify(self, d0, v, i, P):
         _, N = d0
         assert len(P) <= 4*math.ceil(math.log(N+1,2))
-        (_, ((_vi), _, _)) = P[-1]
-        assert _vi == (v,i)
-        R = self.ARB.reconstruct(P)
-        assert (i, P) == self.query(v, (R, None))
-        return True
+        for (_, ((_vi), _, _)) in P[::-1]:
+            if _vi == (v,i):
+                R = self.ARB.reconstruct(P)
+                assert (i, P) == self.query(v, (R, None))
+                return True
+        raise ValueError
 
     def simulate_insert(self, d0, v, P):
         """If digest(DA) == d0, then this function returns

@@ -30,6 +30,12 @@ class SamplerTest(unittest.TestCase):
                 DA = insert(v, DA)
                 assert digest(DA) == simulate_insert(d0, v, PN)
             index, _ = query(v, DA)
+            if index is None:
+                print 'index is None'
+                print v
+                print DA
+                print query(v, DA)
+                print index
             assert index is not None
 
         d0 = digest(DA)
@@ -37,7 +43,7 @@ class SamplerTest(unittest.TestCase):
         for _ in range(100):
             i = PRF(os.urandom(20)).randint(0,N-1)
             v, P = select(i, DA)
-            verify_query(d0, v, i, P)
+            verify(d0, v, i, P)
 
 
 import time
