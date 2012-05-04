@@ -76,10 +76,12 @@ class AuthRedBlack():
 
     def search(self, q, D):
         """
-        Search through the binary tree.
+        Search the binary tree from the root to a leaf node. The leaf node 
+        will be smallest element that is >= q.
 
         Returns:
-            an array containing the values at each node visited
+            a tuple containing the path through the tree (the values of each
+            node visited)
         """
         result = []
         while D:
@@ -101,6 +103,12 @@ class AuthRedBlack():
         Reconstruct a partial view of a tree (a path from root to leaf)
         given a proof object consisting of the colors and values from
         the path.
+
+        forall q and D:
+            R = reconstruct(search(q, D))
+            assert digest(D) == digest(R)
+            assert search(q, D) == search(q, R)
+            assert digest(insert(q, D)) == digest(insert(q, R))
         """
         P = iter(P)
         try:

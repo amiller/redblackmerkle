@@ -4,16 +4,22 @@ May 2012
 
 An alternate proof-of-work scheme for Bitcoin. Instead of merely computing
 hashes, miners compete by demonstrating high-throughput access to their
-database of 'unspent coins'. 
+database of 'unspent coins'.
 
-This is achieved by using storing each 'unspent coin' in a MerkleSampler, 
-an Authenticated Data Structure that supports uniform selection of a
-random element from the set.
+This is achieved by storing each 'unspent coin' as an element in a data-
+structure such that elements can be selected pseudo-randomly (uniformly)
+and verified against a known digest (i.e., the root hash of a Merkle tree).
+
+The only way to build a machine that's good at producing this proof-of-work
+is to build a machine that is also efficient at checking for double- spends. 
+This will increase the decentralized of Bitcoin, as the cost of maintaining 
+the 'unspent coins' database is currently "unpaid overtime", so-to-speak. 
+Many miners participate in pools without keeping around their own copy of the
+state, abdicating their roles as network participants.
 
 """
 
 from sampler import MerkleSampler
-import json
 import random
 from Crypto.Hash import SHA256
 
@@ -24,22 +30,23 @@ select = MS.select
 verify = MS.verify
 
 """
-select() and verify():
-    A random element is selected from a sampler DA as follows:
+MerkleSampler select() and verify():
+
+    A random element is selected from a sampler, DA, as follows:
 
         i = randint(0, N-1)
         element, VO = select(i, DA)
 
     where VO is the O(log N) verification object (a trace through the
-    Merkle tree)
-
-    The selection can be verified in O(log N) worst-case time using
-    the verification object:
+    Merkle tree). The selection can be verified in O(log N) worst-case 
+    time using the verification object:
     
         verify(d0, element, i, VO)
 
     where d0 = digest(DA).
 """
+
+
 
 def do_work(iv, k, DA, lookup):
     """
@@ -52,6 +59,9 @@ def do_work(iv, k, DA, lookup):
     The final value of the accumulator is the proof-of-work, which can be
     compared to a difficulty threshold, a la Bitcoin.
 
+    There is no way to go any faster at the proof-of-work except by
+    improving performance of the 'select' function (lookup by index),
+    which even as a black-box can be used to form a verifier.
     """
     acc = iv
     walk = []  # Collect the verification objects in reverse order
@@ -82,22 +92,8 @@ def verify_work(d0, acc, walk, k):
     for (prev_acc, data, VO) in walk:
         i = PRF(prev_acc).randint(0, N-1)
         v = H(data)
-        assert verify_query(d0, v, i, VO)
+        assert verify(d0, v, i, VO)
         assert acc == H((prev_acc, data, VO))
         acc = prev_acc
 
     return True
-
-
-def blackbox_O1_query_verifier(selector):
-    """
-    A verifier that can evaluate select() on arbitrary inputs can
-    simulate (verify) a query using only O(1) input (the array index) and
-    O(log N) effort.
-    """
-    def verify_query(d0, v, i):
-        data, VO = selector(i)
-        assert verify(d0, v, i, VO)
-        return True
-
-    return verify_query

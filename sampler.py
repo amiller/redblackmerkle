@@ -3,12 +3,20 @@ Andrew Miller <amiller@cs.ucf.edu>
 May 2012
 
 
-An Authenticated Set supporting query(), insert(), delete(), and get_random()
-all in O(log N) time with O(N) storage, as well as verification in O(log N)
-time with O(1) state.
+MerkleSampler represents a set of elements. In addition to the usual 
+set operations (query, insert, remove), this data structure also provides
+   - select   # Return element at index i (i is in range 0..N-1)
+   - verify
 
-This is based on the  Red-Black Merkle tree, but with an additional array that
-can be used to select random elements.
+All of these operations require O(log N) time in the worst-case.
+
+This structure is based on a Red-Black Merkle tree with an additional 
+array that enables elements to be selected at random (uniformly). The
+array index for each element is stored along in the tree, which allows
+this selection to be verified. New elements are always inserted at the
+end of the array, and removed elements are 'filled-in' by replacing
+them with the last element.
+
 
 
 Type definitions and common notations:
@@ -36,12 +44,15 @@ DA:
 
 
 P:
-    A verification object for sampler operations.
+    A verification object for sampler operations. The following constraint
+    holds:
 
-    P: is a Verification Object (a trace through the merkle tree)
-    N: The number of elements in the set (i.e., len(A))
+        verify(d0, v, i, P) == True    if-and-only-if
 
-    The verification object can also be used by simulate_search to compute
+        digest(DA) == d0       and
+        (v,P) == select(i, DA)
+
+    The verification object can be used by simulate_insert to compute
     the resulting digest for a tree:
 
         forall v, DA such that    P = query(v, DA)
@@ -53,9 +64,7 @@ P:
 
 from authredblack import AuthRedBlack
 import json
-import random
 import math
-
 
 class MerkleSampler():
     def __init__(self, digest=lambda _ : ''):
@@ -67,19 +76,6 @@ class MerkleSampler():
         """
         return (self.ARB.digest(D), len(A))
 
-    def query(self, v, (D,A)):
-        """Search for an element in the set
-        Returns:
-            (i,    P)    if v is in the set
-            (None, P) otherwise
-            where P is the proof object for a search in D for (v,0)
-        """
-        P = self.ARB.search((v,0), D)
-        if not P: return None, P
-        (_, ((_v,i), _, _)) = P[-1]
-        if _v == v: return i, P
-        return None, P
-
     def select(self, i, (D,A)):
         """Select the element at index location i (in 0..N-1) and return a 
         Verification Object
@@ -90,6 +86,19 @@ class MerkleSampler():
         v = A[i]
         (_, P) = self.query(v, (D,A))
         return v, P
+
+    def query(self, v, (D,A)):
+        """Search for an element in the tree
+        Returns:
+            (i,    P)    if v is in the set
+            (None, P) otherwise
+            where P is the proof object for a search in D for (v,0)
+        """
+        P = self.ARB.search((v,0), D)
+        if not P: return None, P
+        (_, ((_v,i), _, _)) = P[-1]
+        if _v == v: return i, P
+        return None, P
 
     def insert(self, v, (D,A)):
         """Add a new element to the set

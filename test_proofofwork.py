@@ -6,8 +6,8 @@ import random
 import time
 
 import proofofwork; reload(proofofwork)
-from proofofwork import do_work, verify_work, sampler_worker
-from proofofwork import select, verify_query, H, MS, PRF
+from proofofwork import do_work, verify_work
+from proofofwork import select, verify, H, MS, PRF, blackbox_O1_query_verifier
 
 insert = MS.insert
 query = MS.query
@@ -18,28 +18,17 @@ def build_shortcut_table(DA, lookup):
     """
     This is an attempt to cheat at the work by building a function 
     that's fast at solving the work puzzles, but that can't be used 
-    to validate queries with proportionally good efficiency.
+    to validate queries with proportionally better efficiency.
 
-    This approach involves building an O(N * log N) table that
-    can be used to solve work puzzles with a single lookup. This is a 
-    tradeoff of increased storage for faster time. The proof-of-work 
-    scheme only measures time, so this is what a 'miner' would want
-    to do optimize their payout.
+    It's possible to tradeoff off increased storage for faster queries.
+    The proof-of-work scheme only measures time, so this is what a 
+    'miner' would want to in order do optimize their payout. This
+    approach involves building an O(N * log N) table that solves work
+    puzzles with a single lookup.
 
-    The do_work() function below is faster because it doesn't
-    actually access the tree.
-
-    TODO: Finish this note
-
-    However, this attempt at cheating still results in O(log N)
-    lookups, as shown in the construction of verify_query.
-
-    In other words if you have oracle access to select() then
-    you can build a verifier.
-
-    -- So, why not just exercise the array?
-    -- What about update costs?
-    
+    However, this attempt at cheating still results in O(log N) 
+    verification of O(1) results (just the elment and index i) as
+    shown with the verify_query construction below.
     """
 
     D,A = DA
@@ -55,13 +44,17 @@ def build_shortcut_table(DA, lookup):
         acc = iv
         walk = []
         for _ in range(k):
-            # Draw a random element (and its corresponding proof object)
             i = PRF(acc).randint(0, N-1)
             data, VO = table[i]
             walk.insert(0, (acc, data, VO))
             acc = H((acc, data, VO))
-
         return (acc, walk)
+
+    # Construct a verifier that only requires O(1) input, using our table
+    def verify_query(d0, v, i):
+        data, VO = table[i]
+        assert verify(d0, v, i, VO)
+        return True
 
     return table_worker
 
