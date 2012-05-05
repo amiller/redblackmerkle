@@ -3,35 +3,43 @@ Andrew Miller <amiller@cs.ucf.edu>
 May 2012
 
 
-A Proof-of-Throughput scheme is a tuple 
+A Proof-of-Throughput scheme is a way for a Server to prove to its Clients
+that it is able to perform a computation F very efficiently. The scheme is a
+tuple:
 
      (F, Sample, Verify) 
 
-where F is a function that a Server wants to prove it can evaluate many times
-within some time interval, i.e. at a minimum throughput. The Client gives the
-client a random string as a puzzle challenge - the server has to evaluate the
-function T times (on average) in order to find a winning solution.
+where F is the function that the Server wants to prove it can evaluate many 
+times within some time interval, i.e. at a minimum throughput. The Client gives 
+the Server a random string as a puzzle and a challenge T - the server has to 
+evaluate F an average of T times in order to find a puzzle solution.
 
-The effectiveness of this scheme is controlled by a parameter k, such that the 
-Verifier requires O(k) effort to verify a winning solution, and an adversary 
-that only evaluates F(d) for a subset of its domain (M/N) will have to 
-expend O(T * (M/N)^k) effort to produce a winning solution.
+The effectiveness of this scheme is controlled by a parameter k, such that the
+Verifier requires O(k) effort to verify a winning solution, but an adversary 
+with faulty hardware (fails with probability e) has to perform O(e^k) 
+operations.
 
 
 Some suggested instantiations of this scheme:
 
-- A cloud storage provider can use this to demonstrate the fault tolerance 
+- A cloud storage provider can use this to demonstrate the fault tolerance
   of its data layout[1], similar to 1.
 
-- Bitcoin currently uses proof-of-throughput to a Hash function evaluator
+- You could prove you have access to a very fast number-sorter? GPU benchmarks...
 
-- My proposed alternative is to create proofs-of-throughput to the 'unspent-
-  coins' database, which is necessary for validating transactions.
+- Bitcoin currently uses proof-of-throughput to a Hash function evaluator, in
+  so many words (analysis to come, hopefully).
+
+- My proposed alternative to Bitoin is to create proofs-of-throughput to the 
+  'unspent-coins' database, which is what's necessary for validating 
+  transactions. Many miners currently don't bother to maintain one. This is a 
+  better way utilization of the proof-of-work scheme.
 
 
 [1] How to Tell if Your Cloud Files are Vulnerable to Drive Crashes. 
     Bowers, Dijk, Juels, Oprea, and Rivest. 2011
     http://www.rsa.com/rsalabs/staff/bios/kbowers/publications/RAFT.
+
 
 
 Notation
