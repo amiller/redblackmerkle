@@ -1,20 +1,13 @@
 Red-Black Merkle Tree Sampler
 =============================
 
-This is a demonstration of an Authenticated Data Structure [0] that provides the following operations:
+This is a demonstration of an Authenticated Data Structure [0] that can be used to provide proofs-of-efficiency, by which a Server demonstrates that it is capable of responding to some minimum number of queries within a time interval. 
 
-    query()       # test an element for set membership
-    delete()      # not implemented yet
-    insert()
-    select()      # Select an element from the set using an index 0..N
+A cloud-storage provider could use this to make public claims about the redundancy of its storage layout, using an approach similar to [1]. Bitcoin [2] miners could use this to demonstrate their access to the 'unspent coins' database, which is necessary to validate transactions.
 
-Authenticated Data Structures are used in protocols between three parties: 1) the trusted Source, which creates the data and publishes a digest; 2) the untrusted Server, which maintains a copy of the data and responds to queries; and 3) the Client, which verifies the Server's responses against the known digest.
+Authenticated Data Structures are used in protocols between three parties: 1) the trusted Source, which creates data and publishes a digest; 2) the untrusted Server, which maintains a copy of the data and responds to queries; and 3) the Client, which verifies the Server's responses against the known digest. In this implementation, the data structure requires O(N) storage and each operation takes O(log N) time. These operations can also be verified in worst-case O(log N) time using a Verification Object (a path through a Merkle tree). A verifying Client is only required to maintain O(1) state (specifically, the Merkle tree root hash).
 
-In this implementation, the data structure requires O(N) storage and each operation takes O(log N) time. These operations can also be verified in worst-case O(log N) time using a Verification Object (a path through a Merkle tree). A verifying Client is only required to maintain O(1) state (specifically, the Merkle tree root hash).
-
-This datastructure can be used to make a proof-of-throughput, by which a Server proves that it can respond to some number of queries per second. A cloud-storage provider could use this to make claims about the redundancy of its storage layout, using an approach similar to [1]. The Client selects a random value <code>p</code> and issues it to the Server as a challenge. The Server responds by finding a solution <code>q</code> such that when <code>p||q</code> is used as the seed to a PRF, and a random walk is taken through <code>k</code> elements in the set (adding to a Hash-based accumulator along the way), the final accumulator value falls below a difficulty threshold. This is similar to the proof-of-work scheme in Bitcoin [2]. In fact, the motivation for this data structure is to replace the current proof-of-work scheme in Bitcoin with an alternate one based on proof-of-availability to the 'unspent coins' database.
-
-This implementation consists of  augmented with a secure hash function to form a dynamic Merkle tree. The tree is also augmented with a 'size' field, in order to select random elements uniformly from the set in O(log N) time.
+A Server can prove it can service some throughput of queries to this data structure per second. The Client selects a random value <code>p</code> and issues it to the Server as a challenge. The Server responds by finding a solution <code>q</code> such that when <code>p||q</code> is used as the seed to a PRF, and a random walk is taken through <code>k</code> elements in the set (adding to a Hash-based accumulator along the way), the final accumulator value falls below a difficulty threshold. This is similar to the proof-of-work scheme in Bitcoin [2]. In fact, the motivation for this data structure is to replace the current Bitcoin proof-of-work with an alternative one based on a proof-of-efficiency for queries to 'unspent coins' database.
 
 - redblack.py: <code>RedBlackTree</code> is a general purpose Red-Black binary search tree [3] that can easily be augmented with a 'digest' function. <code>AuthSelectRedBlackTree</code> augments this structure with a secure hash function, forming a dynamic Merkle tree. It also includes a 'size' field so that elements can be selected uniformly randomly.
 

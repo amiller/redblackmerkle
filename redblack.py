@@ -245,7 +245,7 @@ class AuthSelectRedBlack(RedBlack):
             if q == k: return i+j
             (D,i) = (L,i) if q < k else (R,i+j+1)
         raise ValueError
-                
+                    
     def verify(self, d0, v, i, P):
         _, N = d0
         import math
