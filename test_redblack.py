@@ -1,9 +1,9 @@
-import unittest
 import random
 from Crypto.Hash import SHA256
 import json
-import authredblack; reload(authredblack)
-from authredblack import RedBlack, AuthSelectRedBlack
+import redblack; reload(redblack)
+from redblack import RedBlack, AuthSelectRedBlack
+import unittest
 
 
 def invariants(D):

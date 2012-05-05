@@ -3,17 +3,17 @@ import unittest
 import random
 from Crypto.Hash import SHA256
 import json
-import authredblack; reload(authredblack)
-from authredblack import AuthSelectRedBlack
+import redblack; reload(redblack)
+from redblack import AuthSelectRedBlack
 
 H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()[:4]
-ARB = AuthSelectRedBlack(H)
-digest = ARB.digest
-search = ARB.search
-insert = ARB.insert
-reconstruct = ARB.reconstruct
-balance = ARB.balance
-query = ARB.query
+ASRB = AuthSelectRedBlack(H)
+digest = ASRB.digest
+search = ASRB.search
+insert = ASRB.insert
+reconstruct = ASRB.reconstruct
+balance = ASRB.balance
+query = ASRB.query
 
 
 def tree2dot(D):

@@ -5,7 +5,7 @@ import unittest
 import random
 import time
 
-import authredblack; reload(authredblack)
+import redblack; reload(redblack)
 import proofofwork; reload(proofofwork)
 from proofofwork import do_work, verify_work
 from proofofwork import select, verify, H, ASRB, PRF

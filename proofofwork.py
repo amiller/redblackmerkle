@@ -21,7 +21,7 @@ state, foregoing their ability to independently verify transactions.
 
 """
 
-from authredblack import AuthSelectRedBlack
+from redblack import AuthSelectRedBlack
 import random
 from Crypto.Hash import SHA256
 
