@@ -1,5 +1,5 @@
-Red-Black Merkle Tree Sampler
-=============================
+Red-Black Merkle Tree
+=====================
 
 This is a demonstration of an Authenticated Data Structure [0] that can be used to provide proofs-of-efficiency, by which a Server demonstrates that it is capable of responding to some minimum number of queries within a time interval. 
 
