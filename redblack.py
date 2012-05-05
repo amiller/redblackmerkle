@@ -5,13 +5,22 @@ May 2012
 AuthSelectRedBlack is an authenticated dictionary that allows all typical
 operations to be performed in O(log N). The correctness of each operation
 can also be verified in O(log N) time by using a Merkle tree. Only O(1) of
-state needs to be stored by a Verifier - specifically the Merkle root hash.
+state needs to be stored by a Verifier, specifically the Merkle root hash.
 Additionally, the dictionary supports selection of an element by its rank,
-which is useful for selecting set elements at random.
+which is useful for choosing set elements at random, as is necessary for a
+Proof-of-Throughput.
 
 
 This implementation uses Red-Black Merkle trees as described in [1], and
-in particular the Okasaki style balancing rules [2].
+in particular the Okasaki style balancing rules [2]. Here's why I haven't
+implemented Delete yet [3].
+
+
+[1] Persistent Authenticated Dictionaries and Their Applications
+    http://cs.brown.edu/people/aris/pubs/pad.pdf
+[2] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
+[3] Missing method: How to delete from Okasaki's red-black trees
+    http://matt.might.net/articles/red-black-delete/
 
 
 Type definitions and common notations:
@@ -139,12 +148,10 @@ class RedBlack():
 
         else:
             _, _, (_k, _, _), _ = child
-            if _k <= k:
-                assert dL == self.digest(child)
-                return (c, child, (k, dL, dR), ())
+            if _k <= k: 
+                return (c, child, (k, self.digest(child), dR), ())
             else:
-                assert dR == self.digest(child)
-                return (c, (), (k, dL, dR), child)
+                return (c, (), (k, dL, self.digest(child)), child)
 
 
     def insert(self, q, D):
