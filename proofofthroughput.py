@@ -65,10 +65,10 @@ H = lambda x: SHA256.new(str(x)).hexdigest()[:8]
 
 def do_work(iv, nonce, k, F, Sample):
     """
-    1. Initialize an accumulator with 'iv'. 
-    2. Using the current accumulator value as the as the seed to a PRF, 
-       select a random element from the set.
-    3. Add the data for this element into the accumulator.
+    1. Initialize an accumulator with (iv,nonce). 
+    2. Using the accumulator value as the as a seed to a PRF,
+       select a random element, d, from the domain of F.
+    3. Add the result of F(d) into the accumulator.
     4. Repeat (from 2) for k iterations.
 
     The final value of the accumulator is the proof-of-work, which can be

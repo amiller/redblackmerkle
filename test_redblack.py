@@ -174,7 +174,5 @@ class AuthSelectRedBlackTest(unittest.TestCase):
             assert verify(d0, v, i, P)
 
 
-
-
 if __name__ == '__main__':
     unittest.main()
