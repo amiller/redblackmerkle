@@ -13,6 +13,8 @@ A Server can prove it can service some throughput of queries to this data struct
 
 - proofofthroughput.py: a general construction of proofs-of-throughput. Several examples are given, especially one using the select() function of an <code>AuthSelectRedBlackTree</code>.
 
+- toycoin.py: a simple version of Bitcoin based on storing the 'unspent coins' in an <code>AuthSelectRedBlackTree</code>
+
 
 Illustrations
 =============
