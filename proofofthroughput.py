@@ -53,7 +53,7 @@ F: D -> R
 
 Sample: String -> D
 
-     A deterministic PRF that accepts a string as a seed and produces 
+     A deterministic PRNG that accepts a string as a seed and produces 
      random elements uniformly from D.
 
 
@@ -74,7 +74,7 @@ H = lambda x: SHA256.new(str(x)).hexdigest()[:8]
 def do_work(iv, nonce, k, F, Sample):
     """
     1. Initialize an accumulator with (iv,nonce). 
-    2. Using the accumulator value as the as a seed to a PRF,
+    2. Using the accumulator value as the as a seed to a PRNG
        select a random element, d, from the domain of F.
     3. Add the result of F(d) into the accumulator.
     4. Repeat (from 2) for k iterations.
@@ -125,7 +125,7 @@ Examples
 """
 
 import random
-PRF = lambda seed: random.Random(seed)
+PRNG = lambda seed: random.Random(seed)
 
 
 def SortThroughput(N, M):
@@ -134,8 +134,8 @@ def SortThroughput(N, M):
     """
     F = lambda d: sorted(d)
     def Sample(seed):
-        prf = PRF(seed)
-        return [prf.randint(0,M-1) for _ in range(N)]
+        prng = PRNG(seed)
+        return [prng.randint(0,M-1) for _ in range(N)]
     Verify = lambda d, r: F(d) == r
 
     return F, Sample, Verify
@@ -168,7 +168,7 @@ def RedBlackSelectThroughput(D):
     d0 = digest(D)
 
     F = lambda d: select(d, D)
-    Sample = lambda seed: PRF(seed).randint(0, N-1)
+    Sample = lambda seed: PRNG(seed).randint(0, N-1)
     Verify = lambda d, (v,P): verify(d0, v, d, P)
 
     return F, Sample, Verify
