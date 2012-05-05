@@ -4,10 +4,10 @@ import random
 from Crypto.Hash import SHA256
 import json
 import authredblack; reload(authredblack)
-from authredblack import AuthRedBlack
+from authredblack import AuthSelectRedBlack
 
-H = lambda (c, k, hL, hR): SHA256.new(json.dumps((c,k,hL,hR))).hexdigest()[:4]
-ARB = AuthRedBlack(H)
+H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()[:4]
+ARB = AuthSelectRedBlack(H)
 digest = ARB.digest
 search = ARB.search
 insert = ARB.insert
@@ -34,11 +34,11 @@ node [fontname="Arial"];
         color, shape = (('red','ellipse') if c == 'R' else 
                         ('black', 'ellipse'))
         yield '%s [label="%s || %d || %s", color=%s, shape=%s]\n' % \
-            (node, hL, k, hR, color, shape)
+            (node, hL[0], k, hR[0], color, shape)
 
         for hX,X,label in ((hL,L,'L'),(hR,R,'R')):            
             if X: yield '%s -> N%d_%s;\n' % (node, level+1, X[2][0])
-            elif hX:
+            elif hX[0]:
                 n = 'null_%d_%s_%s' % (level+1, k, label)
                 yield '%s -> %s;\n' % (node, n)
                 yield '%s [shape=point, label=x];\n' % (n)
@@ -69,9 +69,14 @@ for i in (5,3,7,9,11):
     D = insert(i, D)
     tree2png('dots/test_reconstruct_i%d.png'%i, D)
 
-
 tree2png('dots/test_reconstruct_0.png', D)
 r = reconstruct(iter(search(10, D)))
 tree2png('dots/test_reconstruct_r0.png', r)
 tree2png('dots/test_reconstruct_1.png', insert(10, D))
 tree2png('dots/test_reconstruct_r1.png', insert(10, r))
+
+D = ()
+values = range(30)
+#random.shuffle(values)
+for v in values: D = insert(v, D)
+tree2png('dots/sequential.png', D)

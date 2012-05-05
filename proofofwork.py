@@ -21,15 +21,17 @@ state, foregoing their ability to independently verify transactions.
 
 """
 
-from sampler import MerkleSampler
+from authredblack import AuthSelectRedBlack
 import random
 from Crypto.Hash import SHA256
 
 PRF = lambda seed: random.Random(seed)
 H = lambda x: SHA256.new(str(x)).hexdigest()
-MS = MerkleSampler(H)
-select = MS.select
-verify = MS.verify
+ASRB = AuthSelectRedBlack(H)
+size = ASRB.size
+digest = ASRB.digest
+select = ASRB.select
+verify = ASRB.verify
 
 """
 MerkleSampler select() and verify():
@@ -50,7 +52,7 @@ MerkleSampler select() and verify():
 
 
 
-def do_work(iv, k, DA, lookup):
+def do_work(iv, k, D, lookup):
     """
     1. Initialize an accumulator with 'iv'. 
     2. Using the current accumulator value as the as the seed to a PRF, 
@@ -67,11 +69,11 @@ def do_work(iv, k, DA, lookup):
     """
     acc = iv
     walk = []  # Collect the verification objects in reverse order
-    N = len(DA[1])
+    N = size(D)
     for _ in range(k):
         # Draw a random element (and its corresponding proof object)
         i = PRF(acc).randint(0, N-1)
-        element, VO = select(i, DA)
+        element, VO = select(i, D)
         data = lookup(element)
         walk.insert(0, (acc, data, VO))
         acc = H((acc, data, VO))

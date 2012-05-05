@@ -3,7 +3,7 @@ import random
 from Crypto.Hash import SHA256
 import json
 import authredblack; reload(authredblack)
-from authredblack import AuthRedBlack
+from authredblack import RedBlack, AuthSelectRedBlack
 
 
 def invariants(D):
@@ -57,7 +57,7 @@ def invariants(D):
 def test_cases():
     global correct_result, test_case_W, test_case_N, test_case_S, test_case_E
     R,B = 'RB'
-    x,y,z = ((k, '*', '*') for k in 'xyz')
+    x,y,z = ((k, '', '') for k in 'xyz')
     a,b,c,d = ((B,(),(k, '', ''),()) for k in 'abcd')
 
     # Test cases from figure 1 in
@@ -75,13 +75,13 @@ class RedBlackTest(unittest.TestCase):
     """
     def setUp(self):
         global digest, search, insert, reconstruct, balance, query
-        ARB = AuthRedBlack()
-        digest = ARB.digest
-        search = ARB.search
-        insert = ARB.insert
-        reconstruct = ARB.reconstruct
-        balance = ARB.balance
-        query = ARB.query
+        RB = RedBlack()
+        digest = RB.digest
+        search = RB.search
+        insert = RB.insert
+        reconstruct = RB.reconstruct
+        balance = RB.balance
+        query = RB.query
 
     def test_degenerate(self):
         assert insert('a', ()) == ('B', (), ('a','',''), ())
@@ -131,38 +131,50 @@ class RedBlackTest(unittest.TestCase):
                 search(i, insert(i, R)))
 
 
-class AuthRedBlackTest(unittest.TestCase):
+class AuthSelectRedBlackTest(unittest.TestCase):
     def setUp(self):
-        global digest, search, insert, reconstruct, balance
-        H = lambda (c, k, dL, dR): SHA256.new(json.dumps((c,k,dL,dR))).hexdigest()
-        ARB = AuthRedBlack(H)
-        digest = ARB.digest
-        search = ARB.search
-        insert = ARB.insert
-        reconstruct = ARB.reconstruct
-        balance = ARB.balance
-        query = ARB.query
+        global digest, search, insert, reconstruct, select, verify, rank
+        H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()
+        ASRB = AuthSelectRedBlack(H)
+        digest = ASRB.digest
+        search = ASRB.search
+        insert = ASRB.insert
+        reconstruct = ASRB.reconstruct
+        query = ASRB.query
+        select = ASRB.select
+        rank = ASRB.rank
+        verify = ASRB.verify
 
     def test_auth(self):
-        T = ()
-        for i in range(0,10,3): T = insert(i, T)
-        for i in range(1,11,3): T = insert(i, T)
-        for i in range(2,12,3):
-            s = search(i, T)
-            r = reconstruct(iter(s))
-            invariants(T)
-            assert search(i, r) == search(i, T)
-            assert search(i, insert(i, r)) == search(i, insert(i, T))
-            assert digest(insert(i, r)) == digest(insert(i, T))
+        N = 100
+        D = ()
+        values = range(N)
+        random.shuffle(values)
+        for i in values[:-10]: D = insert(i, D)
+        for i in values[-10:]:
+            s = search(i, D)
+            r = reconstruct(s)
+            invariants(D)
+            assert search(i, r) == search(i, D)
+            assert search(i, insert(i, r)) == search(i, insert(i, D))
+            assert digest(insert(i, r)) == digest(insert(i, D))
+
+    def test_select(self):
+        N = 100
+        D = ()
+        values = range(N)
+        random.shuffle(values)
+        for v in values: D = insert(v, D)
+        d0 = digest(D)
+
+        for _ in range(100):
+            i = random.randint(0,N-1)
+            v, P = select(i, D)
+            assert i == rank(v, D)
+            assert verify(d0, v, i, P)
+
+
 
 
 if __name__ == '__main__':
     unittest.main()
-
-    ARB = AuthRedBlack()
-    digest = ARB.digest
-    search = ARB.search
-    insert = ARB.insert
-    reconstruct = ARB.reconstruct
-    balance = ARB.balance
-    query = ARB.query

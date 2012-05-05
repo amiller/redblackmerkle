@@ -5,16 +5,17 @@ import unittest
 import random
 import time
 
+import authredblack; reload(authredblack)
 import proofofwork; reload(proofofwork)
 from proofofwork import do_work, verify_work
-from proofofwork import select, verify, H, MS, PRF
+from proofofwork import select, verify, H, ASRB, PRF
 
-insert = MS.insert
-query = MS.query
-digest = MS.digest
+insert = ASRB.insert
+query = ASRB.query
+digest = ASRB.digest
 
 
-def build_shortcut_table(DA, lookup):
+def build_shortcut_table(D, lookup):
     """
     This is an attempt to cheat at the work by building a function 
     that's fast at solving the work puzzles, but that can't be used 
@@ -31,13 +32,11 @@ def build_shortcut_table(DA, lookup):
     shown with the verify_query construction below.
     """
 
-    D,A = DA
+    (_, N) = digest(D)
     table = {}
-    N = len(A)
     for i in range(N):
-        v = A[i]
+        v, VO = select(i, D)
         data = lookup(v)
-        _, VO = query(v, DA)
         table[i] = (data, VO)
 
     def table_worker(iv, k):
@@ -63,34 +62,35 @@ class ProofOfWorkTest(unittest.TestCase):
     def setUp(self):
         values = range(1000)
         random.shuffle(values)
-        self.table = {}
-        self.k = 64
-        self.DA = (), []
-
+        table = {}
+        D = ()
         for v in values: 
-            self.table[H(v)] = v
-            self.DA = insert(H(v), self.DA)
+            table[H(v)] = v
+            D = insert(H(v), D)
+        self.k = 64
+        self.D = D
+        self.table = table
 
     def test_cheat_at_work(self):
-        DA, table = self.DA, self.table
+        D, table = self.D, self.table
 
         # Build the lookup table
-        normal_worker = lambda iv, k: do_work(iv, k, DA, table.get)
-        table_worker = build_shortcut_table(DA, table.get)
+        normal_worker = lambda iv, k: do_work(iv, k, D, table.get)
+        table_worker = build_shortcut_table(D, table.get)
 
         ivs = [H(os.urandom(20)) for _ in xrange(1000)]
         k = 16
-        d0 = digest(DA)
+        d0 = digest(D)
 
         def verify(worker):
             for iv in ivs:
-                acc, PN = worker(iv, k)
-                assert verify_work(d0, acc, PN, k)
+                acc, VO = worker(iv, k)
+                assert verify_work(d0, acc, VO, k)
 
         def timeit(worker):
             t0 = time.clock()
             for iv in ivs:
-                acc, PN = worker(iv, k)
+                acc, VO = worker(iv, k)
             t1 = time.clock()
             return (t1-t0)/len(ivs)
 
@@ -99,27 +99,27 @@ class ProofOfWorkTest(unittest.TestCase):
 
 
     def test_work(self):
-        d0 = MS.digest(self.DA)
+        d0 = digest(self.D)
         k = 32
 
         for i in range(100):
             iv = H(os.urandom(20))
-            acc, PN = do_work(iv, k, self.DA, self.table.get)
-            assert verify_work(d0, acc, PN, k)
+            acc, VO = do_work(iv, k, self.D, self.table.get)
+            assert verify_work(d0, acc, VO, k)
 
 
     def test_work_with_threshold(self):
         """
         Simulate the behavior of a Bitcoin miner.
         """
-        d0 = MS.digest(self.DA)
+        d0 = digest(self.D)
         k = 32
 
         # Produce a hash with two 0's in the front
         threshold = 1<<(256-8)
         while True:
             iv = H(os.urandom(20))
-            acc, VO = do_work(iv, k, self.DA, self.table.get)
+            acc, VO = do_work(iv, k, self.D, self.table.get)
             if long(acc,16) < threshold:
                 print 'Found winning block:', acc
                 assert verify_work(d0, acc, VO, k)
