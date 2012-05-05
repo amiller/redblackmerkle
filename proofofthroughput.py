@@ -137,7 +137,7 @@ def HashThroughput():
     """
     Prove how fast you can compute hashes
     """
-    F = lambda d: SHA256.new(d).hexdigest()[:8]
+    F = lambda d: SHA256.new(d).hexdigest()
     Sample = lambda seed: seed
     Verify = lambda d, r: F(d) == r
 

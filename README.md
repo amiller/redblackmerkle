@@ -1,7 +1,7 @@
 Red-Black Merkle Tree
 =====================
 
-This is a demonstration of an Authenticated Data Structure [0] that can be used to provide proofs-of-efficiency, by which a Server demonstrates that it is capable of responding to some minimum number of queries within a time interval. 
+This is a demonstration of an Authenticated Data Structure [0] that can be used to provide proofs-of-throughput, by which a Server demonstrates that it is capable of responding to some minimum number of queries within a time interval.
 
 A cloud-storage provider could use this to make public claims about the redundancy of its storage layout, using an approach similar to [1]. Bitcoin [2] miners could use this to demonstrate their access to the 'unspent coins' database, which is necessary to validate transactions.
 
@@ -11,7 +11,7 @@ A Server can prove it can service some throughput of queries to this data struct
 
 - redblack.py: <code>RedBlackTree</code> is a general purpose Red-Black binary search tree [3] that can easily be augmented with a 'digest' function. <code>AuthSelectRedBlackTree</code> augments this structure with a secure hash function, forming a dynamic Merkle tree [4]. It also includes a 'size' field so that elements can be selected uniformly randomly.
 
-- proofofwork.py: uses the <code>AuthSelectRedBlack</code> to produce proofs-of-throughput to the select() function
+- proofofthroughput.py: a general construction of proofs-of-throughput. Several examples are given, especially one using the select() function of an <code>AuthSelectRedBlackTree</code>.
 
 
 Illustrations
@@ -29,4 +29,3 @@ Illustrations
 [2] http://bitcoin.org/bitcoin.pdf<br>
 [3] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps<br>
 [4] http://cs.brown.edu/people/aris/pubs/pad.pdf<br>
-
