@@ -5,7 +5,7 @@ May 2012
 
 An alternate proof-of-work scheme for Bitcoin. Instead of merely computing
 hashes, miners compete by demonstrating high-throughput access to their
-database of 'unspent coins'.
+'unspent coins' database.
 
 This is achieved by storing each 'unspent coin' as an element in a data-
 structure such that elements can be selected pseudo-randomly (uniformly)
@@ -22,7 +22,7 @@ state, foregoing their ability to independently verify transactions.
 
 
 D:
-    The Unspent Coins database. It's an AuthSelectRedBlackTree.
+    An 'Unspent Inputs' database. It's an AuthSelectRedBlack.
 
 Tx:
     A transaction. Consists of inputs and outputs
@@ -42,47 +42,64 @@ Tx:
             assert amt > 0
 
     For a transaction to be valid, the signature must match the public keys
-    for all the inputs and the amount of tokens going out must exactly match 
+    for all the inputs and the amount of tokens going out must exactly match
     the value of the tokens coming in.
 
+
+It gets slightly more complicated. Since the _authoritative_ version of
+transaction commits is decided by the longest chain of blocks, it's also
+essential for miners to store (at least some sliding window of) the blockchain
+history.
+
+
+C:
+    A block chain
+        (
+
+B:
+    A Block consists of a sequence of transactions, along with the digest of
+    a previous block (forming a chain) and a winning solution to the
+    proof-of-work puzzle.
+
+        (dPrev, Txs, Nonce) = B
+    
 """
 
 from proofofthroughput import do_work, verify_work
-from redblack import AuthSelectRedBlack
+from redblack import RedBlack
 
 import random
-PRF = lambda seed: random.Random(seed)
+PRNG = lambda seed: random.Random(seed)
 
 from Crypto.Hash import SHA256
-H = lambda x: '' if not x else SHA256.new(str(x)).hexdigest()[:8]
-
-ASRB = AuthSelectRedBlack(H)
-size = ASRB.size
-search = ASRB.search
-digest = ASRB.digest
-select = ASRB.select
-verify = ASRB.verify
-insert = ASRB.insert
-delete = ASRB.delete
-reconstruct = ASRB.reconstruct
 
 
-class ToyCoin():
-    def __init__(self, verify_signature):
+class Transaction():
+
+    def __init__(self, verify_signature, block_window=None):
         self.verify_signature = verify_signature
-        
+        self.block_window = block_window
+        H = lambda x: '' if not x else SHA256.new(str(x)).hexdigest()[:8]
+        self.H = H
+        self.RB = RB = RedBlack(H)
+        self.size = RB.size
+        self.query = RB.query
+        self.search = RB.search
+        self.digest = RB.digest
+        self.select = RB.select
+        self.verify = RB.verify
+        self.insert = RB.insert
+        self.delete = RB.delete
+
+
+    """
+    Transactions and unspent-inputs database
+    ========================================
+    """
 
     def digest_transaction(self, Tx):
         (inps, outps, sigs) = Tx
-        return H((inps, outps))  # Exclude sig from the digest
-
-
-    def query_unspent(self, inp, D):
-        P = search((inp, ('',0)), D)
-        if not P: return None, P
-        for _, ((_inp, (pub, amt)), _, _) in P[::-1]:
-            if _inp == inp: return ((pub, amt), P)
-        return None, P
+        return self.H((inps, outps))  # Exclude sig from the digest
 
 
     def apply_transaction(self, Tx, D):
@@ -96,15 +113,16 @@ class ToyCoin():
         # First delete each of the old inputs
         inpPs = []
         for inp in inps:
-            v, P = self.query_unspent(inp, D)
-            # D = delete((inp,v), D)
+            P = self.search((inp,None), D)
+            v = self.query((inp,None), D)
+            # D = delete(v, D)
             inpPs.append(P)
 
         # Then insert each of the new outputs
         outPs = []
         for i, v in enumerate(outs):
-            P = search(((dTx,i), ('',0)), D)
-            D = insert(((dTx,i),     v ), D)
+            P = self.search(((dTx,i), v), D)
+            D = self.insert(((dTx,i), v), D)
             outPs.append(P)
 
         return D, (inpPs, outPs)
@@ -121,10 +139,9 @@ class ToyCoin():
         # First simulate removing each of the old inputs
         assert len(inps) == len(sigs) == len(inpPs)
         for inp, P, sig in zip(inps, inpPs, sigs):
-            R = reconstruct(P)
-            assert digest(R) == d0
-            (pub, amt), _P = self.query_unspent(inp, R)
-            assert P == _P
+            assert self.verify(d0, P)
+            _inp, (pub, amt) = self.query((inp, None), P)
+            assert _inp == inp
             assert self.verify_signature(dTx, pub, sig)
             assert amt > 0
             total_in += amt
@@ -136,10 +153,29 @@ class ToyCoin():
         # Then simulate insert each of the new outputs
         assert len(outs) == len(outPs)
         for i, (out, P) in enumerate(zip(outs, outPs)):
-            R = reconstruct(P)
-            assert digest(R) == d0
-            _out, _P = self.query_unspent((dTx,i), R)
-            assert out != _out
-            d0 = digest(insert(((dTx,i),out), R))
+            assert self.verify(d0, P)
+            _dTxi, _ = self.query(((dTx,i), None), P)
+            assert _dTxi != (dTx,i)
+            d0 = self.digest(self.insert(((dTx,i),out), P))
 
         return d0
+
+
+
+class Block():
+    def __init__(self, window=None):
+        pass
+    """
+    Blockchain and proof-of-throughput functions
+    ============================================
+    """
+
+    def digest_block(self):
+        pass
+
+    def apply_block():
+        pass
+
+    def verify_block(self, B, VO):
+        pass
+

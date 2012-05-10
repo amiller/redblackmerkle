@@ -32,14 +32,11 @@ RedBlack():
     a pure function of the values of its children - this means the digests are
     maintained correctly even when nodes are inserted and deleted.
 
-AuthSelectRedBlack(RedBlack):
-    This upgrades the RedBlack tree to a Merkle tree by including the hash of
-    each of its children nodes in the digest. It also adds a 'size' field which
-    is used to implement the select() and rank() functions.
+    This tree includes a 'size' field which is used to implement the select() 
+    and rank() functions.
 
- ** Note that for both RedBlack and AuthSelectRedBlack, these objects simply
-    define functions, the actual data structure D is just a tuple, as described 
-    below
+ ** Note that RedBlack objects simply define functions, the actual data structure 
+    D is just a tuple, as described below
 
 D:
     A Node in the tree, especially the root. Of the form:
@@ -52,31 +49,18 @@ D:
         Left, Right: the children, also Nodes,
 
         LeftDigest, RightDigest:
-             digests of the children.
-                 H( dL || k || dR ) is the digest for each Node.
+             digests of the children
 
         Element: the node values are assumed to be fully ordered
 
     - () represents the empty tree.
+      dO == digest(()) is the empty-digest
 
 R:
-    A stubby tree reconstructed from a Verification Object. Edges that have
-    become stubs were not visited during the search that produced the VO, so
-    they won't be visted when simulating/replaying the operation.
+    The result of search(q, D) is a Verification Object, comprising a stubby
+    tree of the O(log N) nodes that were visited during the search.
 
-P:
-    A Verification Object. This is just a trace through the merkle tree. It's
-    a tuple of node values, of the form:
-
-         (Color, Key, LeftDigest, RightDigest) = P[0]
-         abbreviated (c, k, dL, dR)
-    
-    where the first element is the root of the tree, and the last element
-    is (_, Element, _, _) if Element was found in the tree.
-
-
-Correctness invariant for augmenting the tree with 'digest'
-===========================================================
+    Invariants:
 
     forall q and D:
         R = reconstruct(search(q, D))
@@ -84,97 +68,114 @@ Correctness invariant for augmenting the tree with 'digest'
         assert search(q, D) == search(q, R)
         assert digest(insert(q, D)) == digest(insert(q, R))
 
+    forall q, D, R:
+        assert verify(digest(D), R)   # Precondition 1
+        assert search(q, R)           # Precondition 2
+
+        # If the above preconditions hold, then the
+        # following are guaranteed to succeed:
+
+        assert search(q, R) == search(q, D)
+        assert insert(q, R) == insert(q, D)
+        assert delete(q, R) == delete(q, D)
+        assert digest(q, R) == digest(q, D)
+        assert query(q, R) == query(q, D)
+
 """
+import math
 
 class RedBlack():
     def __init__(self, H = lambda _: ''):
-        self.H = H
+        def _H(d):
+            if not d: return (0, H(()))
+            (c, k, dL, dR) = d
+            return (max(dL[0] + dR[0], 1), H(d))
+        self.H = _H
 
 
     def digest(self, D):
         # The hash corresponding to a node is the Hash function applied
         # to the concatenation its children's hashes and its own value
-        if not D: return self.H(None)
+        if not D: return self.H(())
         c, _, (k, dL, dR), _ = D
         return self.H((c, k, dL, dR))
 
 
+    def verify(self, d0, D, count=None):
+        if not D: return True
+        if count is None: count = 2*math.ceil(math.log(d0[0]+1,2))
+        dO = self.digest(())
+        assert d0 == self.digest(D)
+        _, L, (_, dL, dR), R = D
+        if dL == dR == dO: return True
+        assert dL != dO and dR != dO
+        assert count > 0
+        assert bool(L) ^ bool(R)
+        if L: return self.verify(dL, L, None if count is None else count-1)
+        if R: return self.verify(dR, R, None if count is None else count-1)
+
+
     def search(self, q, D):
         """
-        Search the binary tree from the root to either a node containing q
-        or a leaf node.
+        Produce a projection of the tree resulting from searching for 
+        element q. 
+
+        forall q and D:
+            R = search(q, D)
+            assert digest(D) == digest(R)
+            assert search(q, D) == search(q, R)
+            assert digest(insert(q, D)) == digest(insert(q, R))
 
         Returns:
             a tuple containing the path through the tree (the values of each
             node visited)
         """
-        result = []
-        while D:
-            c, L, (k, dL, dR), R = D
-            result.append((c, (k, dL, dR)))
-            if q == k: break
-            D = L if q < k else R
-        return tuple(result)
+        dO = self.digest(())
+        if not D: return ()
+        c, L, (k, dL, dR), R = D
+        if q <= k and dL != dO:
+            if not L:
+                print q, k, dO, D
+            assert L
+            return (c, self.search(q, L), (k, dL, dR), ())
+        if q  > k and dR != dO:
+            assert R
+            return (c, (), (k, dL, dR), self.search(q, R))
+        return D
 
 
     def query(self, q, D):
-        P = self.search(q, D)
-        if not P: return None, P
-        (c,(k, _, _)) = P[-1]
-        return k if k == q else None, P
-
-
-    def reconstruct(self, P):
-        """
-        Reconstruct a partial view of a tree (a path from root to leaf)
-        given a proof object consisting of the colors and values from
-        the path.
-
-        forall q and D:
-            R = reconstruct(search(q, D))
-            assert digest(D) == digest(R)
-            assert search(q, D) == search(q, R)
-            assert digest(insert(q, D)) == digest(insert(q, R))
-        """
-        P = iter(P)
-        try:
-            (c, (k, dL, dR)) = P.next()
-        except StopIteration:
-            return ()
-
-        child = self.reconstruct(P)
-        if not child:
-            return (c, (), (k, dL, dR), ())
-
+        dO = self.digest(())
+        while D:
+            c, L, (k, dL, dR), R = D
+            if dL == dR == dO: return k
+            D = L if q <= k else R
         else:
-            _, _, (_k, _, _), _ = child
-            if _k <= k: 
-                return (c, child, (k, self.digest(child), dR), ())
-            else:
-                return (c, (), (k, dL, self.digest(child)), child)
+            raise ValueError, "Couldn't descend: %s" % ((c, k, dL, dR),)
 
 
     def insert(self, q, D):
         """
-        Insert element x into the tree.
+        Insert element q into the tree.
         Exceptions:
-            AssertionError if x is already in the tree.
+            AssertionError if q is already in the tree.
         """
         balance = self.balance
-        x = (q, self.digest(None), self.digest(None))
+        dO = self.digest(())
+        x = (q, dO, dO)
 
         def ins(D):
-            # Trivial case
-            if not D: return ('R', (), x, ())
-            c, a, y, b = D
-            (p, dL, dR) = y
+            if not D: return ('B', (), x, ())
 
-            # Element already exists (insert is idempotent)
-            assert q != p
+            c, L, y, R = D
+            (k, dL, dR) = y
+            assert q != k, "Can't insert element that is already present"
+            if dL == dR == dO:
+                if q < k: return balance(('R', ins(L), x, make_black(D)))
+                if q > k: return balance(('R', make_black(D), y, ins(R)))
 
-            # Leaf node found (this will become the parent)
-            if q < p: return balance((c, ins(a), y, b))
-            if q > p: return balance((c, a, y, ins(b)))
+            if q < k: return balance((c, ins(L), y, R))
+            if q > k: return balance((c, L, y, ins(R)))
 
         make_black = lambda (c,a,y,b): ('B',a,y,b)
         return balance(make_black(ins(D)))
@@ -187,11 +188,6 @@ class RedBlack():
 
 
     def balance(self, D):
-        # This is the simplest way I could think of simulating the 
-        # pattern matching from Haskell. The point is to be able to
-        # use the very elegant statement from the Okasaki paper [1]
-        # (see the return statement in this function)
-        # TODO: find a more elegant way to write this
         def refresh(D):
             # Recompute the hashes for each node, but only if the children
             # are available. Otherwise, we assume the current value is correct.
@@ -201,7 +197,13 @@ class RedBlack():
             return (c, L, (k, dL, dR), R)
 
         R,B,a,b,c,d,x,y,z,m,n,o,p,_ = 'RBabcdxyzmnop_'
-        blank = self.digest(None)
+        dO = self.digest(())
+
+        # This is the simplest way I could think of simulating the 
+        # pattern matching from Haskell. The point is to be able to
+        # use the very elegant statement from the Okasaki paper [1]
+        # (see the return statement in this function)
+        # TODO: find a more elegant way to write this
         def match(*args):
             table = {}
             def _match(left,right):
@@ -215,7 +217,7 @@ class RedBlack():
 
             if _match(args, refresh(D)):
                 a,b,c,d,x,y,z,m,n,o,p = map(table.get, 'abcdxyzmnop')
-                return (R,(B,a,(x,m,n),b),(y,blank,blank),(B,c,(z,o,p),d))
+                return (R,(B,a,(x,m,n),b),(y,dO,dO),(B,c,(z,o,p),d))
             else: return None
 
         return refresh(match(B,(R,(R,a,(x,m,n),b),(y,_,o),c),(z,_,p),d) or
@@ -225,44 +227,27 @@ class RedBlack():
                        D)
 
 
-class AuthSelectRedBlack(RedBlack):
-
-    def __init__(self, H = lambda _: ''):
-        size = lambda x: 0 if not x else 1 + x[2][1] + x[3][1]
-        RedBlack.__init__(self, lambda x: (H(x), size(x)))
-        
     def select(self, i, D):
-        P = []
+        dO = self.digest(())
         while D:
             c, L, (k, dL, dR), R = D
-            P.append((c, (k, dL, dR)))
-            j = dL[1]
-            if i == j: 
-                return k, tuple(P)
-            (D,i) = (L,i) if i < j else (R,i-j-1)
+            j = dL[0]
+            if i == j == 0: return k
+            (D,i) = (L,i) if i < j else (R,i-j)
         raise ValueError
+
 
     def rank(self, q, D):
+        dO = self.digest(())
         i = 0
-        P = []
         while D:
             c, L, (k, dL, dR), R = D
-            P.append((c, (k, dL, dR)))
-            j = dL[1]
-            if q == k: return i+j
-            (D,i) = (L,i) if q < k else (R,i+j+1)
+            j = dL[0]
+            if dL == dR == dO and q == k: return i+j
+            (D,i) = (L,i) if q <= k else (R,i+j)
         raise ValueError
-                    
-    def verify(self, d0, v, i, P):
-        _, N = d0
-        import math
-        assert len(P) <= 2*math.ceil(math.log(N+1,2))
-        R = self.reconstruct(P)
-        assert self.digest(R) == d0
-        _v, _ = self.select(i, R)
-        assert _v == v
-        return True
+
 
     def size(self, D):
-        (_, N) = self.digest(D)
+        (N, _) = self.digest(D)
         return N

@@ -2,7 +2,7 @@ import random
 from Crypto.Hash import SHA256
 import json
 import redblack; reload(redblack)
-from redblack import RedBlack, AuthSelectRedBlack
+from redblack import RedBlack
 import unittest
 
 
@@ -13,40 +13,39 @@ def invariants(D):
     # value in its left subtree.
     def _greatest(D):
         if not D: return
-        (c, a, y, b) = D
-        if a and b:
-            if isinstance(y, tuple): assert _greatest(a)[0] < y[0] 
-            else: assert _greatest(a) < y
-            return _greatest(b)
+        (c, L, (k, _, _), R) = D
+        if L and R:
+            assert _greatest(L) == k
+            return _greatest(R)
         else:
-            #assert not a and not b
-            return y
+            assert not L and not R
+            return k
 
     # No red node has a red parent
     def _redparent(D, parent_is_red=False):
         if not D: return
-        (c, a, y, b) = D
+        (c, L, (k, _, _), R) = D
         assert not (parent_is_red and c == 'R')
-        _redparent(a, c == 'R')
-        _redparent(b, c == 'R')
+        _redparent(L, c == 'R')
+        _redparent(R, c == 'R')
 
     # Paths are balanced if the number of black nodes along any simple path
     # from this root to a leaf are the same
     def _paths_black(D):
         if not D: return 0
-        (c, a, y, b) = D
-        p = _paths_black(a)
-        assert p == _paths_black(b)
+        (c, L, y, R) = D
+        p = _paths_black(L)
+        assert p == _paths_black(R)
         return p + (c == 'B')
 
     # Merkle tree digests must be computed correctly
     def _digests(D):
         if not D: return
-        (c, a, (x, dL, dR), b) = D
-        if a: assert dL == digest(a)
-        if b: assert dR == digest(b)
-        _digests(a)
-        _digests(b)
+        (c, L, (k, dL, dR), R) = D
+        if L: assert dL == digest(L)
+        if R: assert dR == digest(R)
+        _digests(L)
+        _digests(R)
 
     _greatest(D)
     _redparent(D)
@@ -54,57 +53,35 @@ def invariants(D):
     _digests(D)
 
 
-def test_cases():
-    global correct_result, test_case_W, test_case_N, test_case_S, test_case_E
-    R,B = 'RB'
-    x,y,z = ((k, '', '') for k in 'xyz')
-    a,b,c,d = ((B,(),(k, '', ''),()) for k in 'abcd')
-
-    # Test cases from figure 1 in
-    # http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
-    test_case_W = (B,(R,(R,a,x,b),y,c),z,d)
-    test_case_N = (B,(R,a,x,(R,b,y,c)),z,d)
-    test_case_S = (B,a,x,(R,(R,b,y,c),z,d))
-    test_case_E = (B,a,x,(R,b,y,(R,c,z,d)))
-    correct_result = (R,(B,a,x,b),y,(B,c,z,d))
-test_cases()
-
 class RedBlackTest(unittest.TestCase):
     """
     The tree.insert, search, 
     """
     def setUp(self):
-        global digest, search, insert, reconstruct, balance, query
+        global digest, search, insert, verify, balance, query, size
         RB = RedBlack()
+        balance = RB.balance
         digest = RB.digest
         search = RB.search
         insert = RB.insert
-        reconstruct = RB.reconstruct
-        balance = RB.balance
         query = RB.query
+        size = RB.size
 
     def test_degenerate(self):
-        assert insert('a', ()) == ('B', (), ('a','',''), ())
-        assert search(0, ()) == ()
-        assert reconstruct(iter(())) == ()
-        assert digest(()) == ''
-
-    def test_simple_cases(self):
-        assert balance(test_case_W) == correct_result
-        assert balance(test_case_N) == correct_result
-        assert balance(test_case_S) == correct_result
-        assert balance(test_case_E) == correct_result
+        assert insert('a', ()) == ('B', (), ('a',(0,''),(0,'')), ())
+        assert search('notfound', ()) == ()
+        assert digest(()) == (0,'')
 
     def _test_reconstruct(self, D, n):
         for q in range(n):
-            found, proof = query(q, D)
-            r = reconstruct(iter(proof))
-            if found: assert proof == tuple(search(q, r))
+            R = search(q, D)
+            assert query(q, R) == query(q, D)
 
     def test_sequential(self):
         D = ()
         for i in range(10):
             D = insert(i, D)
+            assert size(D) == i+1
             self._test_reconstruct(D, 10)
             invariants(D)
 
@@ -119,31 +96,30 @@ class RedBlackTest(unittest.TestCase):
             invariants(D)
             d0 = digest(D)
             for i in range(n):
-                assert (query(i, D)[0] == i) == (i in ref)
+                assert (query(i, D) == i) == (i in ref)
 
-    def test_insert_reconstruct_search(self):
+    def test_insert_search(self):
         T = ()
         for i in range(0, 8, 2): T = insert(i, T)
         for i in (-1,1,3,5,7):
-            R = reconstruct(iter(search(i, T)))
+            R = search(i, T)
             invariants(T)
-        assert (search(i, insert(i, T)) == 
-                search(i, insert(i, R)))
+            assert (search(i, insert(i, T)) == 
+                    search(i, insert(i, R)))
 
 
 class AuthSelectRedBlackTest(unittest.TestCase):
     def setUp(self):
-        global digest, search, insert, reconstruct, select, verify, rank
+        global digest, search, insert, select, verify, rank
         H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()
-        ASRB = AuthSelectRedBlack(H)
-        digest = ASRB.digest
-        search = ASRB.search
-        insert = ASRB.insert
-        reconstruct = ASRB.reconstruct
-        query = ASRB.query
-        select = ASRB.select
-        rank = ASRB.rank
-        verify = ASRB.verify
+        RB = RedBlack(H)
+        digest = RB.digest
+        search = RB.search
+        insert = RB.insert
+        select = RB.select
+        verify = RB.verify
+        query = RB.query
+        rank = RB.rank
 
     def test_auth(self):
         N = 100
@@ -152,12 +128,12 @@ class AuthSelectRedBlackTest(unittest.TestCase):
         random.shuffle(values)
         for i in values[:-10]: D = insert(i, D)
         for i in values[-10:]:
-            s = search(i, D)
-            r = reconstruct(s)
+            R = search(i, D)
+            assert verify(digest(D), R)
             invariants(D)
-            assert search(i, r) == search(i, D)
-            assert search(i, insert(i, r)) == search(i, insert(i, D))
-            assert digest(insert(i, r)) == digest(insert(i, D))
+            assert search(i, R) == search(i, D)
+            assert search(i, insert(i, R)) == search(i, insert(i, D))
+            assert digest(insert(i, R)) == digest(insert(i, D))
 
     def test_select(self):
         N = 100
@@ -169,9 +145,12 @@ class AuthSelectRedBlackTest(unittest.TestCase):
 
         for _ in range(100):
             i = random.randint(0,N-1)
-            v, P = select(i, D)
+            v = select(i, D)
+            R = search(v, D)
             assert i == rank(v, D)
-            assert verify(d0, v, i, P)
+            assert verify(d0, R)
+            assert i == rank(v, R)
+            assert v == select(i, R)
 
 
 if __name__ == '__main__':

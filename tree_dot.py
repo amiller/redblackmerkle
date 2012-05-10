@@ -4,16 +4,14 @@ import random
 from Crypto.Hash import SHA256
 import json
 import redblack; reload(redblack)
-from redblack import AuthSelectRedBlack
+from redblack import RedBlack
 
 H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()[:4]
-ASRB = AuthSelectRedBlack(H)
-digest = ASRB.digest
-search = ASRB.search
-insert = ASRB.insert
-reconstruct = ASRB.reconstruct
-balance = ASRB.balance
-query = ASRB.query
+RB = RedBlack(H)
+digest = RB.digest
+search = RB.search
+insert = RB.insert
+query = RB.query
 
 
 def tree2dot(D):
@@ -28,17 +26,17 @@ node [fontname="Arial"];
     def edges(D, level=0):
         if not D: return
 
-        (c, L, (k, hL, hR), R) = D
+        (c, L, (k, dL, dR), R) = D
 
         node = 'N%d_%s' % (level, k)
         color, shape = (('red','ellipse') if c == 'R' else 
                         ('black', 'ellipse'))
         yield '%s [label="%s || %d || %s", color=%s, shape=%s]\n' % \
-            (node, hL[0], k, hR[0], color, shape)
+            (node, dL[1], k, dR[1], color, shape)
 
-        for hX,X,label in ((hL,L,'L'),(hR,R,'R')):            
+        for dX,X,label in ((dL,L,'L'),(dR,R,'R')):
             if X: yield '%s -> N%d_%s;\n' % (node, level+1, X[2][0])
-            elif hX[0]:
+            elif dX[0]:
                 n = 'null_%d_%s_%s' % (level+1, k, label)
                 yield '%s -> %s;\n' % (node, n)
                 yield '%s [shape=point, label=x];\n' % (n)
@@ -70,10 +68,10 @@ for i in (5,3,7,9,11):
     tree2png('dots/test_reconstruct_i%d.png'%i, D)
 
 tree2png('dots/test_reconstruct_0.png', D)
-r = reconstruct(iter(search(10, D)))
-tree2png('dots/test_reconstruct_r0.png', r)
+R = search(10, D)
+tree2png('dots/test_reconstruct_r0.png', R)
 tree2png('dots/test_reconstruct_1.png', insert(10, D))
-tree2png('dots/test_reconstruct_r1.png', insert(10, r))
+tree2png('dots/test_reconstruct_r1.png', insert(10, R))
 
 D = ()
 values = range(30)

@@ -8,15 +8,16 @@ import time
 import redblack; reload(redblack)
 import proofofthroughput; reload(proofofthroughput)
 from proofofthroughput import do_work, verify_work
-from proofofthroughput import select, verify, H, ASRB, PRF
+from proofofthroughput import select, verify, H, RB, PRNG
 from proofofthroughput import RedBlackSelectThroughput
 from proofofthroughput import SortThroughput
 from proofofthroughput import HashThroughput
 
-insert = ASRB.insert
-query = ASRB.query
-digest = ASRB.digest
-size = ASRB.size
+insert = RB.insert
+digest = RB.digest
+search = RB.search
+query = RB.query
+size = RB.size
 
 class RedBlackSelectThroughputTest(unittest.TestCase):
     def setUp(self):
@@ -35,17 +36,18 @@ class RedBlackSelectThroughputTest(unittest.TestCase):
 
         # Construct the proof of work functions
         def F(d):
-            v, P = select(d, D)
+            v = select(d, D)
+            R = search(v, D)
             data = table[v]
-            return (data, v, P)
+            return (data, R)
         self.F = F
 
-        self.Sample = lambda seed: PRF(seed).randint(0, N-1)
+        self.Sample = lambda seed: PRNG(seed).randint(0, N-1)
 
         def Verify(d, r):
-            (data, v, P) = r
-            assert verify(d0, v, d, P)
-            assert H(data) == v
+            (data, R) = r
+            assert verify(d0, R)
+            assert H(data) == select(d, R)
             return True
         self.Verify = Verify
 
@@ -133,15 +135,6 @@ class ProofOfThroughputTest(unittest.TestCase):
         F, Sample, Verify = SortThroughput(N, 100)
         self._test_proofofwork(F, Sample, Verify, notes)
 
-    def test_SortThroughput(self):
-        N = 10
-        notes = dict(name="Sorting N elements", 
-                     domain="tuples of N=%d integers from 0..100" % N,
-                     function="sorted(d)")
-        
-        F, Sample, Verify = SortThroughput(N, 100)
-        self._test_proofofwork(F, Sample, Verify, notes)
-
     def test_RedBlackThroughput(self):
         N = 10
         values = range(N)
@@ -151,8 +144,8 @@ class ProofOfThroughputTest(unittest.TestCase):
 
         notes = dict(name="Selecting from an ordered set, including the "
                      "Merkle tree path",
-                     domain="integers 1..%d",
-                     function="select(i, D)")
+                     domain="integers 1..%d" % N,
+                     function="search(select(i, D), D)")
 
         F, Sample, Verify = RedBlackSelectThroughput(D)
         self._test_proofofwork(F, Sample, Verify, notes)

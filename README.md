@@ -9,11 +9,11 @@ Authenticated Data Structures are used in protocols between three parties: 1) th
 
 A Server can prove it can service some throughput of queries to this data structure per second. The Client selects a random value <code>p</code> and issues it to the Server as a challenge. The Server responds by finding a solution <code>q</code> such that when <code>p||q</code> is used as the seed to a PRF, and a random walk is taken through <code>k</code> elements in the set (adding to a Hash-based accumulator along the way), the final accumulator value falls below a difficulty threshold. This is similar to the proof-of-work scheme in Bitcoin [2]. In fact, the motivation for this data structure is to replace the current Bitcoin proof-of-work with an alternative one based on a proof-of-efficiency for queries to 'unspent coins' database.
 
-- redblack.py: <code>RedBlackTree</code> is a general purpose Red-Black binary search tree [3] that can easily be augmented with a 'digest' function. <code>AuthSelectRedBlackTree</code> augments this structure with a secure hash function, forming a dynamic Merkle tree [4]. It also includes a 'size' field so that elements can be selected uniformly randomly.
+- redblack.py: <code>RedBlack</code> is a general purpose Red-Black binary search tree [3] that can easily be augmented with a 'digest' function. At minimum, the tree is augmented with a 'size' field so that verification can be constrained to take O(log N) time. Typically, the digest should include a secure hash function, forming a dynamic Merkle tree [4].
 
-- proofofthroughput.py: a general construction of proofs-of-throughput. Several examples are given, especially one using the select() function of an <code>AuthSelectRedBlackTree</code>.
+- proofofthroughput.py: a general construction of proofs-of-throughput. Several examples are given, especially one using the select() function of an <code>RedBlack</code>.
 
-- toycoin.py: a simple version of Bitcoin based on storing the 'unspent coins' in an <code>AuthSelectRedBlackTree</code>
+- toycoin.py: a simple version of Bitcoin based on storing the 'unspent coins' in an <code>RedBlack</code>
 
 
 Illustrations

@@ -68,7 +68,7 @@ Verify: D -> R -> {True,False}
 
 
 from Crypto.Hash import SHA256
-H = lambda x: SHA256.new(str(x)).hexdigest()[:8]
+H = lambda x: '' if not x else SHA256.new(str(x)).hexdigest()[:8]
 
 
 def do_work(iv, nonce, k, F, Sample):
@@ -152,12 +152,13 @@ def HashThroughput():
     return F, Sample, Verify
 
 
-from redblack import AuthSelectRedBlack
-ASRB = AuthSelectRedBlack(H)
-size = ASRB.size
-digest = ASRB.digest
-select = ASRB.select
-verify = ASRB.verify
+from redblack import RedBlack
+RB = RedBlack(H)
+digest = RB.digest
+select = RB.select
+verify = RB.verify
+search = RB.search
+size = RB.size
 
 def RedBlackSelectThroughput(D):
     """
@@ -167,8 +168,8 @@ def RedBlackSelectThroughput(D):
     N = size(D)
     d0 = digest(D)
 
-    F = lambda d: select(d, D)
+    F = lambda d: search(select(d, D), D)
     Sample = lambda seed: PRNG(seed).randint(0, N-1)
-    Verify = lambda d, (v,P): verify(d0, v, d, P)
+    Verify = lambda d, R: verify(d0, R) and search(select(d, R), R) == R
 
     return F, Sample, Verify
