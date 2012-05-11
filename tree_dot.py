@@ -8,8 +8,8 @@ from redblack import RedBlack
 
 H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()[:4]
 RB = RedBlack(H)
+reconstruct = RB.reconstruct
 digest = RB.digest
-search = RB.search
 insert = RB.insert
 delete = RB.delete
 query = RB.query
@@ -55,7 +55,7 @@ def dot2png(dot):
                          stdout=PIPE, stdin=PIPE, stderr=PIPE)
     stdout, stderr = P.communicate(dot)
     #print dot
-    print stderr
+    if stderr: print stderr
     return stdout
 
 
@@ -65,45 +65,57 @@ def tree2png(filename, D):
 
 D = ()
 for i in (5,3,7,9,11):
-    D = insert(i, D)
+    D, _ = insert(i, D)
     tree2png('dots/test_reconstruct_i%d.png'%i, D)
 
+d0 = digest(D)
 tree2png('dots/test_reconstruct_0.png', D)
-R = search(10, D)
+R = reconstruct(d0, insert(10, D)[1])
 tree2png('dots/test_reconstruct_r0.png', R)
-tree2png('dots/test_reconstruct_1.png', insert(10, D))
-tree2png('dots/test_reconstruct_r1.png', insert(10, R))
+tree2png('dots/test_reconstruct_1.png', insert(10, D)[0])
+tree2png('dots/test_reconstruct_r1.png', insert(10, R)[0])
 
 D = ()
 values = range(31)
 #random.shuffle(values)
-for v in values: D = insert(v, D)
+for v in values: D, _ = insert(v, D)
 tree2png('dots/sequential.png', D)
-D = insert(len(values)+0, D)
+D, _ = insert(len(values)+0, D)
 tree2png('dots/sequential_31.png', D)
 
 
 D = ()
-values = range(10)
+values = range(16)
 for i in values:
-    D = insert(i, D)
-tree2png('dots/delete_10_before.png', D)
+    D, _ = insert(i, D)
+d0 = digest(D)
+_, VO = delete(10, D)
+R = reconstruct(d0, delete(10, D)[1])
+tree2png('dots/test_delete_0.png', D)
+tree2png('dots/test_delete_r0.png', R)
+tree2png('dots/test_delete_1.png', delete(10, D)[0])
+tree2png('dots/test_delete_r1.png', delete(10, R)[0])
+
 
 def test_delete(n=1):
     for _ in range(n):
         D = ()
-        values = range(16)
+        values = range(5)
         random.shuffle(values)
-        for i in values: D = insert(i, D)
+        for i in values: D, _ = insert(i, D)
         random.shuffle(values)
-        for i in values[:8]:
-            R = delete(i, D)
-            if R: assert query(i, R) != i
+        for i in values[:4]:
+            S, VO = delete(i, D)
+            R = reconstruct(digest(D), VO)
+            SR, _VO = delete(i, R)
+            assert _VO == VO
             try:
-                invariants(R)
+                assert digest(SR) == digest(S)
             finally:
-                tree2png('dots/delete_10_before.png', D)
-                tree2png('dots/delete_10_after.png', R)
-            D = R
+                tree2png('dots/delete_10_0.png', D)
+                tree2png('dots/delete_10_1.png', S)
+                tree2png('dots/delete_10_r0.png', R)
+                tree2png('dots/delete_10_r1.png', SR)
+            D = S
 
 test_delete()

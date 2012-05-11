@@ -8,15 +8,16 @@ import time
 import redblack; reload(redblack)
 import proofofthroughput; reload(proofofthroughput)
 from proofofthroughput import do_work, verify_work
-from proofofthroughput import select, verify, H, RB, PRNG
+from proofofthroughput import select, H, RB, PRNG
 from proofofthroughput import RedBlackSelectThroughput
 from proofofthroughput import SortThroughput
 from proofofthroughput import HashThroughput
 
+reconstruct = RB.reconstruct
 insert = RB.insert
 digest = RB.digest
 search = RB.search
-query = RB.query
+delete = RB.delete
 size = RB.size
 
 class RedBlackSelectThroughputTest(unittest.TestCase):
@@ -27,7 +28,7 @@ class RedBlackSelectThroughputTest(unittest.TestCase):
         D = ()
         for v in values: 
             table[H(v)] = v
-            D = insert(H(v), D)
+            D, _ = insert(H(v), D)
         k = 64
         N = size(D)
         self.table = table
@@ -37,16 +38,17 @@ class RedBlackSelectThroughputTest(unittest.TestCase):
         # Construct the proof of work functions
         def F(d):
             v = select(d, D)
-            R = search(v, D)
+            _, VO = delete(v, D)
             data = table[v]
-            return (data, R)
+            return (data, VO)
         self.F = F
 
         self.Sample = lambda seed: PRNG(seed).randint(0, N-1)
 
         def Verify(d, r):
-            (data, R) = r
-            assert verify(d0, R)
+            (data, VO) = r
+            R = reconstruct(d0, VO)
+            assert delete(select(d, R), R)[1] == VO
             assert H(data) == select(d, R)
             return True
         self.Verify = Verify
@@ -140,7 +142,7 @@ class ProofOfThroughputTest(unittest.TestCase):
         values = range(N)
         random.shuffle(values)
         D = ()
-        for i in values: D = insert(i, D)
+        for i in values: D, _ = insert(i, D)
 
         notes = dict(name="Selecting from an ordered set, including the "
                      "Merkle tree path",

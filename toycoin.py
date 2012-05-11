@@ -83,13 +83,12 @@ class Transaction():
         self.H = H
         self.RB = RB = RedBlack(H)
         self.size = RB.size
-        self.query = RB.query
         self.search = RB.search
         self.digest = RB.digest
         self.select = RB.select
-        self.verify = RB.verify
         self.insert = RB.insert
         self.delete = RB.delete
+        self.reconstruct = RB.reconstruct
 
 
     """
@@ -113,16 +112,14 @@ class Transaction():
         # First delete each of the old inputs
         inpPs = []
         for inp in inps:
-            P = self.search((inp,None), D)
-            v = self.query((inp,None), D)
-            # D = delete(v, D)
+            v, _ = self.search((inp,None), D)
+            D, P = self.delete(v, D)
             inpPs.append(P)
 
         # Then insert each of the new outputs
         outPs = []
         for i, v in enumerate(outs):
-            P = self.search(((dTx,i), v), D)
-            D = self.insert(((dTx,i), v), D)
+            D, P = self.insert(((dTx,i), v), D)
             outPs.append(P)
 
         return D, (inpPs, outPs)
@@ -139,13 +136,13 @@ class Transaction():
         # First simulate removing each of the old inputs
         assert len(inps) == len(sigs) == len(inpPs)
         for inp, P, sig in zip(inps, inpPs, sigs):
-            assert self.verify(d0, P)
-            _inp, (pub, amt) = self.query((inp, None), P)
+            R = self.reconstruct(d0, P)
+            (_inp, (pub, amt)), _ = self.search((inp, None), R)
             assert _inp == inp
             assert self.verify_signature(dTx, pub, sig)
             assert amt > 0
             total_in += amt
-            # d0 = digest(delete((inp, (pub,amt)), R))
+            d0 = self.digest(self.delete((inp, (pub,amt)), R)[0])
 
         assert total_in > 0
         assert total_in == total_out
@@ -153,10 +150,11 @@ class Transaction():
         # Then simulate insert each of the new outputs
         assert len(outs) == len(outPs)
         for i, (out, P) in enumerate(zip(outs, outPs)):
-            assert self.verify(d0, P)
-            _dTxi, _ = self.query(((dTx,i), None), P)
-            assert _dTxi != (dTx,i)
-            d0 = self.digest(self.insert(((dTx,i),out), P))
+            R = self.reconstruct(d0, P)
+            if R:
+                (_dTxi, _), _ = self.search(((dTx,i), None), R)
+                assert _dTxi != (dTx,i)
+            d0 = self.digest(self.insert(((dTx,i),out), R)[0])
 
         return d0
 

@@ -154,10 +154,11 @@ def HashThroughput():
 
 from redblack import RedBlack
 RB = RedBlack(H)
+reconstruct = RB.reconstruct
 digest = RB.digest
 select = RB.select
-verify = RB.verify
 search = RB.search
+delete = RB.delete
 size = RB.size
 
 def RedBlackSelectThroughput(D):
@@ -168,8 +169,11 @@ def RedBlackSelectThroughput(D):
     N = size(D)
     d0 = digest(D)
 
-    F = lambda d: search(select(d, D), D)
+    F = lambda d: delete(select(d, D), D)[1]
     Sample = lambda seed: PRNG(seed).randint(0, N-1)
-    Verify = lambda d, R: verify(d0, R) and search(select(d, R), R) == R
+    def Verify(d, VO):
+        R = reconstruct(d0, VO)
+        assert delete(select(d, R), R)[1] == VO
+        return True
 
     return F, Sample, Verify
