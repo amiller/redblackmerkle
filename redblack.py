@@ -77,7 +77,6 @@ R:
 
         assert search(q, R) == search(q, D)
         assert insert(q, R) == insert(q, D)
-        assert delete(q, R) == delete(q, D)
         assert digest(q, R) == digest(q, D)
         assert query(q, R) == query(q, D)
 
@@ -89,7 +88,7 @@ class RedBlack():
         def _H(d):
             if not d: return (0, H(()))
             (c, k, dL, dR) = d
-            return (max(dL[0] + dR[0], 1), H(d))
+            return (dL[0] + dR[0] or 1, H(d))
         self.H = _H
 
 
@@ -101,29 +100,32 @@ class RedBlack():
         return self.H((c, k, dL, dR))
 
 
-    def verify(self, d0, D, count=None):
+    def verify(self, d0, D):
+        """
+        TODO: enforce the invariant that D must contain
+              no more than 
+                   count = 2*math.ceil(math.log(d0[0]+1,2)) + 2
+              elements for it to be a plausible result from search()
+              or search_delete()
+        """
         if not D: return True
-        if count is None: count = 2*math.ceil(math.log(d0[0]+1,2))
         dO = self.digest(())
-        assert d0 == self.digest(D)
         _, L, (_, dL, dR), R = D
-        if dL == dR == dO: return True
-        assert dL != dO and dR != dO
-        assert count > 0
-        assert bool(L) ^ bool(R)
-        if L: return self.verify(dL, L, None if count is None else count-1)
-        if R: return self.verify(dR, R, None if count is None else count-1)
+        if L: assert self.verify(dL, L)
+        if R: assert self.verify(dR, R)
+        return True
 
 
     def search(self, q, D):
         """
         Produce a projection of the tree resulting from searching for 
-        element q. 
+        element q.
 
         forall q and D:
             R = search(q, D)
             assert digest(D) == digest(R)
             assert search(q, D) == search(q, R)
+            assert query(q, D) == query(q, R)
             assert digest(insert(q, D)) == digest(insert(q, R))
 
         Returns:
@@ -132,26 +134,24 @@ class RedBlack():
         """
         dO = self.digest(())
         if not D: return ()
-        c, L, (k, dL, dR), R = D
-        if q <= k and dL != dO:
-            if not L:
-                print q, k, dO, D
-            assert L
-            return (c, self.search(q, L), (k, dL, dR), ())
-        if q  > k and dR != dO:
-            assert R
-            return (c, (), (k, dL, dR), self.search(q, R))
-        return D
+        c, L, x, R = D
+        (k, dL, dR) = x
+        if q <= k:
+            if dL != dO: assert L
+            return (c, self.search(q, L), x, ())
+        if q > k: 
+            if dR != dO: assert R
+            return (c, (), x, self.search(q, R))
 
 
-    def query(self, q, D):
+    def query(self, q, D, K=lambda x:x):
         dO = self.digest(())
         while D:
             c, L, (k, dL, dR), R = D
             if dL == dR == dO: return k
-            D = L if q <= k else R
+            D = L if q <= K(k) else R
         else:
-            raise ValueError, "Couldn't descend: %s" % ((c, k, dL, dR),)
+            raise ValueError, "Couldn't descend"
 
 
     def insert(self, q, D):
@@ -166,28 +166,98 @@ class RedBlack():
 
         def ins(D):
             if not D: return ('B', (), x, ())
-
             c, L, y, R = D
             (k, dL, dR) = y
+
             assert q != k, "Can't insert element that is already present"
-            if dL == dR == dO:
-                if q < k: return balance(('R', ins(L), x, make_black(D)))
-                if q > k: return balance(('R', make_black(D), y, ins(R)))
+
+            if q < k and dL == dO: return balance(('R', ins(L), x, black(D)))
+            if q > k and dR == dO: return balance(('R', black(D), y, ins(R)))
 
             if q < k: return balance((c, ins(L), y, R))
             if q > k: return balance((c, L, y, ins(R)))
 
-        make_black = lambda (c,a,y,b): ('B',a,y,b)
-        return balance(make_black(ins(D)))
+        black = lambda (c,a,y,b): ('B',a,y,b)
+        return balance(black(ins(D)))
+
+
+    def search_delete(self, q, D):
+        """
+        Return a projection of the tree that can be used to simulate a
+        delete() operation. This is just like performing a delete, except
+        we accumulate just the nodes we touch at each step. 
+        """
+        balance = self.balance
+        pass
 
 
     def delete(self, q, D):
-        """
-        """
         balance = self.balance
+        dO = self.digest(())
+
+        def refresh(D):
+            c, L, (k, dL, dR), R = D
+            if L: dL = self.digest(L)
+            if R: dR = self.digest(R)
+            return (c, L, (k, dL, dR), R)
+
+        def unbalancedL((c, L, x, R)):
+            (k, dL, dR) = x
+            (lc, lL, lx, lR) = L
+            if lc == 'B': return balance(('B', turnR(L), x, R)), c=='B'
+            assert c == 'B' and lc == 'R' and lR[0] == 'B'
+            return refresh(('B', lL, lx, balance(('B', turnR(lR), x, R)))), False
+
+        def unbalancedR((c, L, x, R)):
+            (k, dL, dR) = x
+            (rc, rL, rx, rR) = R
+            if rc == 'B': return balance(('B', L, x, turnR(R))), c=='B'
+            assert c == 'B' and rc == 'R' and rL[0] == 'B'
+            return refresh(('B', balance(('B', L, x, turnR(rL))), rx, rR)), False
+
+        def del_(D):
+            """
+            This function recursively 'bubbles' up three values
+            First, the result of each subtree after deleting the element
+            Second, a flag indicating whether we're short by one black path
+            Third, the maximum value in the tree in case deleting changes it
+            """
+            if not D: return (), False, None
+            c, L, (k, dL, dR), R = D
+            if dL == dR == dO:
+                assert q == k
+                return (), True, None
+            if q <= k:
+                if dL != dO: assert L
+                L_, d, m = del_(L)
+                if not L_: return R, c=='B', None
+                if q == k: 
+                    assert m is not None
+                    k = m
+                t = refresh((c, L_, (k, dO, dO), R))
+                return unbalancedR(t) + (None,) if d else (t, False, None)
+            if q  > k:
+                if dR != dO: assert R
+                R_, d, m = del_(R)
+                if not R_: return L, c=='B', k
+                t = refresh((c, L, (k, dO, dO), R_))
+                return unbalancedL(t) + (m,) if d else (t, False, m)
+
+        turnR = lambda (_, L, x, R): ('R', L, x, R)
+        turnB = lambda (_, L, x, R): ('B', L, x, R)
+        turnB_ = lambda x: () if not x else turnB(x)
+
+        def blackify(x):
+            if not x: return (), True
+            (c,a,y,b) = x
+            return ('B',a,y,b), c=='B'
+
+        return balance(turnB_(del_(D)[0]))
+
 
 
     def balance(self, D):
+        if not D: return ()
         def refresh(D):
             # Recompute the hashes for each node, but only if the children
             # are available. Otherwise, we assume the current value is correct.
@@ -232,7 +302,7 @@ class RedBlack():
         while D:
             c, L, (k, dL, dR), R = D
             j = dL[0]
-            if i == j == 0: return k
+            if i == 0 and dL == dR == dO: return k
             (D,i) = (L,i) if i < j else (R,i-j)
         raise ValueError
 
@@ -243,7 +313,7 @@ class RedBlack():
         while D:
             c, L, (k, dL, dR), R = D
             j = dL[0]
-            if dL == dR == dO and q == k: return i+j
+            if q == k and dL == dR == dO: return i + j
             (D,i) = (L,i) if q <= k else (R,i+j)
         raise ValueError
 

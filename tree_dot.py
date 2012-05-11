@@ -11,6 +11,7 @@ RB = RedBlack(H)
 digest = RB.digest
 search = RB.search
 insert = RB.insert
+delete = RB.delete
 query = RB.query
 
 
@@ -31,8 +32,8 @@ node [fontname="Arial"];
         node = 'N%d_%s' % (level, k)
         color, shape = (('red','ellipse') if c == 'R' else 
                         ('black', 'ellipse'))
-        yield '%s [label="%s || %d || %s", color=%s, shape=%s]\n' % \
-            (node, dL[1], k, dR[1], color, shape)
+        yield '%s [label="(%d) %s || %d || %s", color=%s, shape=%s]\n' % \
+            (node, digest(D)[0], dL[1], k, dR[1], color, shape)
 
         for dX,X,label in ((dL,L,'L'),(dR,R,'R')):
             if X: yield '%s -> N%d_%s;\n' % (node, level+1, X[2][0])
@@ -74,7 +75,35 @@ tree2png('dots/test_reconstruct_1.png', insert(10, D))
 tree2png('dots/test_reconstruct_r1.png', insert(10, R))
 
 D = ()
-values = range(30)
+values = range(31)
 #random.shuffle(values)
 for v in values: D = insert(v, D)
 tree2png('dots/sequential.png', D)
+D = insert(len(values)+0, D)
+tree2png('dots/sequential_31.png', D)
+
+
+D = ()
+values = range(10)
+for i in values:
+    D = insert(i, D)
+tree2png('dots/delete_10_before.png', D)
+
+def test_delete(n=1):
+    for _ in range(n):
+        D = ()
+        values = range(16)
+        random.shuffle(values)
+        for i in values: D = insert(i, D)
+        random.shuffle(values)
+        for i in values[:8]:
+            R = delete(i, D)
+            if R: assert query(i, R) != i
+            try:
+                invariants(R)
+            finally:
+                tree2png('dots/delete_10_before.png', D)
+                tree2png('dots/delete_10_after.png', R)
+            D = R
+
+test_delete()

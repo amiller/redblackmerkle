@@ -14,12 +14,11 @@ def invariants(D):
     def _greatest(D):
         if not D: return
         (c, L, (k, _, _), R) = D
+        assert bool(L) == bool(R)
         if L and R:
             assert _greatest(L) == k
             return _greatest(R)
-        else:
-            assert not L and not R
-            return k
+        else: return k
 
     # No red node has a red parent
     def _redparent(D, parent_is_red=False):
@@ -98,6 +97,18 @@ class RedBlackTest(unittest.TestCase):
             for i in range(n):
                 assert (query(i, D) == i) == (i in ref)
 
+    def test_delete(self, n=200):
+        for _ in range(n):
+            D = ()
+            values = range(16)
+            random.shuffle(values)
+            for i in values: D = insert(i, D)
+            random.shuffle(values)
+            for i in values:
+                R = delete(i, D)
+                assert query(i, R) != i
+                invariants(R)
+
     def test_insert_search(self):
         T = ()
         for i in range(0, 8, 2): T = insert(i, T)
@@ -152,6 +163,22 @@ class AuthSelectRedBlackTest(unittest.TestCase):
             assert i == rank(v, R)
             assert v == select(i, R)
 
+
+RB = RedBlack()
+balance = RB.balance
+digest = RB.digest
+search = RB.search
+insert = RB.insert
+delete = RB.delete
+query = RB.query
+size = RB.size
+
+D = ()
+for i in range(10):
+    D = insert(i, D)
+
+D = delete(0, D)
+#print D
 
 if __name__ == '__main__':
     unittest.main()
