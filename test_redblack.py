@@ -57,12 +57,13 @@ class RedBlackTest(unittest.TestCase):
     The tree.insert, search, 
     """
     def setUp(self):
-        global reconstruct, digest, insert, search, size
+        global reconstruct, digest, insert, search, delete, size
         RB = RedBlack()
         reconstruct = RB.reconstruct
         digest = RB.digest
         insert = RB.insert
         search = RB.search
+        delete = RB.delete
         size = RB.size
 
     def test_degenerate(self):
@@ -170,26 +171,6 @@ class AuthSelectRedBlackTest(unittest.TestCase):
             R = reconstruct(d0, VO)
             assert i == rank(v, R)
             assert v == select(i, R)
-
-
-RB = RedBlack()
-digest = RB.digest
-insert = RB.insert
-delete = RB.delete
-search = RB.search
-size = RB.size
-
-def test_delete(n=100):
-    for _ in range(n):
-        D = ()
-        values = range(18)
-        random.shuffle(values)
-        for i in values: D = insert(i, D)
-        random.shuffle(values)
-        for i in values[1:]:
-            R, P = delete(i, D)
-            assert search(i, R)[0] != i
-            invariants(R)
 
 
 if __name__ == '__main__':

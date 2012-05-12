@@ -97,10 +97,10 @@ tree2png('dots/test_delete_1.png', delete(10, D)[0])
 tree2png('dots/test_delete_r1.png', delete(10, R)[0])
 
 
-def test_delete(n=10):
+def test_delete(n=100):
     for _ in range(n):
         D = ()
-        values = range(8)
+        values = range(16)
         random.shuffle(values)
         for i in values: D, _ = insert(i, D)
         random.shuffle(values)

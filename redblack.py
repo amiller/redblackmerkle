@@ -138,7 +138,7 @@ class RedBlack():
         dO = self.digest(())
         # The worst case scenario for a VO depends on the size of the tree
         # TODO: Work out this expression with a compelling diagram
-        assert len(VO) <= 3*math.ceil(math.log(N+1,2))
+        assert len(VO) <= 3*math.ceil(math.log(N+1,2))+4
         table = dict(VO)
         def _recons(d0):
             if d0 == dO or d0 not in table: return ()
