@@ -7,12 +7,12 @@ import redblack; reload(redblack)
 from redblack import RedBlack
 
 H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()[:4]
+#H = hash
 RB = RedBlack(H)
 reconstruct = RB.reconstruct
 digest = RB.digest
 insert = RB.insert
 delete = RB.delete
-query = RB.query
 
 
 def tree2dot(D):
@@ -97,10 +97,10 @@ tree2png('dots/test_delete_1.png', delete(10, D)[0])
 tree2png('dots/test_delete_r1.png', delete(10, R)[0])
 
 
-def test_delete(n=1):
+def test_delete(n=10):
     for _ in range(n):
         D = ()
-        values = range(5)
+        values = range(8)
         random.shuffle(values)
         for i in values: D, _ = insert(i, D)
         random.shuffle(values)
@@ -111,11 +111,12 @@ def test_delete(n=1):
             assert _VO == VO
             try:
                 assert digest(SR) == digest(S)
-            finally:
+            except:
                 tree2png('dots/delete_10_0.png', D)
                 tree2png('dots/delete_10_1.png', S)
                 tree2png('dots/delete_10_r0.png', R)
                 tree2png('dots/delete_10_r1.png', SR)
+                raise
             D = S
 
 test_delete()

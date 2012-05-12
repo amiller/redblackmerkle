@@ -2,25 +2,23 @@
 Andrew Miller <amiller@cs.ucf.edu>
 May 2012
 
-AuthSelectRedBlack is an authenticated dictionary that allows all typical
-operations to be performed in O(log N). The correctness of each operation
-can also be verified in O(log N) time by using a Merkle tree. Only O(1) of
-state needs to be stored by a Verifier, specifically the Merkle root hash.
+This RedBlack tree is an authenticated dictionary, based on a balanced 
+binary search tree [1]. The tree is balanced strictly, so that all usual
+operations can be performed in O(log N) worst-case time. The tree is augmented
+with secure hashes for each node (forming a Merkle tree), which allows the
+correctness of each operation to be verified in O(log N) time. Only O(1) of
+'trusted' state (the Merkle tree root hash) must be maintained by a verifier.
+
 Additionally, the dictionary supports selection of an element by its rank,
-which is useful for choosing set elements at random, as is necessary for a
-Proof-of-Throughput.
-
-
-This implementation uses Red-Black Merkle trees as described in [1], and
-in particular the Okasaki style balancing rules [2]. Here's why I haven't
-implemented Delete yet [3].
-
+which is useful for choosing set elements at random for a Proof-of-Throughput.
 
 [1] Persistent Authenticated Dictionaries and Their Applications
     http://cs.brown.edu/people/aris/pubs/pad.pdf
 [2] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
 [3] Missing method: How to delete from Okasaki's red-black trees
     http://matt.might.net/articles/red-black-delete/
+[4] Andrew Appel. Efficient Verified Red-Black Trees
+    http://www.cs.princeton.edu/~appel/papers/redblack.pdf
 
 
 Type definitions and common notations:
@@ -56,38 +54,68 @@ D:
     - () represents the empty tree.
       dO == digest(()) is the empty-digest
 
+VO:
+    Each of the following operations produces a Verification Object (VO) along 
+    with the result:
+
+        k, VO = search(q, D)
+        D, VO = insert(q, D)
+        D, VO = delete(q, D)
+
+    The VO contains all of the data for the O(log N) nodes we visited during 
+    the computation.
+
+        for (d0, (c, (k, dL, dR))) in VO:
+            assert d0 == digest((c, (), (k, dL, dR), ()))
+
 R:
-    The result of search(q, D) is a Verification Object, comprising a stubby
-    tree of the O(log N) nodes that were visited during the search.
+    The Verification Object can be used to assemble a partial 'reconstructed' 
+    tree
 
-    Invariants:
+         R = reconstruct(d0, VO)
 
-    forall q and D:
-        d0 = digest(D)
-        _, VO = search(q, D)
-        R = reconstruct(digest(D), VO)
-        assert digest(D) == digest(R)
-        assert search(q, D) == search(q, R)
-        assert digest(insert(q, D)[0]) == digest(insert(q, R)[0])
+    All of the tree operations can be performed on a reconstruction, just as
+    though it were an original tree. Operations on a reconstructed tree are
+    guaranteed to produce the same results as with the original (or else raise
+    an exception). 
 
-    forall q, D, VO:
-        R = reconstruct(digest(D), VO) # Precondition 1
-        assert q == search(q, R)[0]    # Precondition 2
+    These invariants are the basis for a correctness and security claim about 
+    this implementation:
 
-        # If the above preconditions hold, then the
-        # following are guaranteed to succeed:
+         for all D, VO:
+             R = reconstruct(d0, VO)
 
-        assert digest(R) == digest(D)
-        assert search(q, R) == search(q, D)
-        assert digest(insert(q, R)[0]) == digest(insert(q, D)[0])
-        assert rank(q, R) == rank(q, D)
-        assert select(rank(q, R), R) == select(rank(q, D), D)
+             if search(q, R) succeeds, then
+                assert search(q, R) == search(q, D)
 
+             if insert(q, R) succeeds, then
+                (R_new, R_VO) = insert(q, R)
+                (D_new, D_VO) = insert(q, D)
+                assert digest(R_new) == digest(D_new)
+                assert R_VO == D_VO
+
+             if delete(q, R) succeeds, then
+                (R_new, R_VO) = delete(q, R)
+                (D_new, D_VO) = insert(q, D)
+                assert digest(R_new) == digest(D_new)
+                assert R_VO == D_VO
 """
 import math
 
 class RedBlack():
-    def __init__(self, H = lambda x: '' if not x else x[1]):
+    """
+    This tree is parameter
+    """
+
+    def __init__(self, H = hash):
+        """
+        Args:
+             H (optional): a collision-resistant hash function that
+                           takes arguments of the form:
+             
+                  H(())
+                  H((c, k, dL, dR))
+        """
         def _H(d):
             if not d: return (0, H(()))
             (c, k, dL, dR) = d
@@ -96,8 +124,10 @@ class RedBlack():
 
 
     def digest(self, D):
-        # The hash corresponding to a node is the Hash function applied
-        # to the concatenation its children's hashes and its own value
+        """
+        The digest for each node is typically computed using the previously-
+        computed digests for its children, rather than recursively.
+        """
         if not D: return self.H(())
         c, _, (k, dL, dR), _ = D
         return self.H((c, k, dL, dR))
@@ -126,7 +156,7 @@ class RedBlack():
             return D
         return stash, VO
 
-
+    
     def search(self, q, D):
         """
         """
@@ -177,6 +207,7 @@ class RedBlack():
         dO = self.digest(())
         d0 = self.digest(D)
         stash, VO = self._stash()
+        #print 'delete called'
         def rehash(D):
             """
             Recompute the digests only when the subtrees are available. 
@@ -193,7 +224,12 @@ class RedBlack():
             (lc, lL, lx, lR) = L
             stash(lx[1], lL)
             stash(lx[2], lR)
-            if lc == 'B': return balance(('B', turnR(L), x, R)), c=='B'
+            if lc == 'B':
+                #print 'recolor Left'
+                return balance(('B', turnR(L), x, R)), c=='B'
+            #print 'restructure Left'
+            stash(lR[2][1], lR[1])
+            stash(lR[2][2], lR[3])
             assert c == 'B' and lc == 'R' and lR[0] == 'B'
             return rehash(('B', lL, lx, balance(('B', turnR(lR), x, R)))), False
 
@@ -202,7 +238,12 @@ class RedBlack():
             (rc, rL, rx, rR) = R
             stash(rx[1], rL)
             stash(rx[2], rR)
-            if rc == 'B': return balance(('B', L, x, turnR(R))), c=='B'
+            if rc == 'B':
+                #print 'recolor Right'
+                return balance(('B', L, x, turnR(R))), c=='B'
+            #print 'restructure Right'
+            stash(rL[2][1], rL[1])
+            stash(rL[2][2], rL[3])
             assert c == 'B' and rc == 'R' and rL[0] == 'B'
             return rehash(('B', balance(('B', L, x, turnR(rL))), rx, rR)), False
 
@@ -246,8 +287,8 @@ class RedBlack():
     def balance(self, D):
         if not D: return ()
         def rehash(D):
-            # Recompute the hashes for each node, but only if the children
-            # are available. Otherwise, we assume the current value is correct.
+            # Recompute the hashes for each child, but only if the child is
+            # is available. Otherwise, we leave the current value unchanged.
             c, L, (k, dL, dR), R = D
             if L: dL = self.digest(L)
             if R: dR = self.digest(R)
@@ -261,6 +302,7 @@ class RedBlack():
         # use the very elegant statement from the Okasaki paper [1]
         # (see the return statement in this function)
         # TODO: find a more elegant way to write this
+        #       benchmarking confirms this is the slowest part
         def match(*args):
             table = {}
             def _match(left,right):

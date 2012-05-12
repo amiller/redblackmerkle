@@ -1,9 +1,9 @@
+import unittest; reload(unittest)
 import random
 from Crypto.Hash import SHA256
 import json
 import redblack; reload(redblack)
 from redblack import RedBlack
-import unittest
 
 
 def invariants(D):
@@ -57,29 +57,29 @@ class RedBlackTest(unittest.TestCase):
     The tree.insert, search, 
     """
     def setUp(self):
-        global digest, search, insert, verify, balance, query, size
+        global reconstruct, digest, insert, search, size
         RB = RedBlack()
-        balance = RB.balance
+        reconstruct = RB.reconstruct
         digest = RB.digest
-        search = RB.search
         insert = RB.insert
-        query = RB.query
+        search = RB.search
         size = RB.size
 
     def test_degenerate(self):
-        assert insert('a', ()) == ('B', (), ('a',(0,''),(0,'')), ())
-        assert search('notfound', ()) == ()
-        assert digest(()) == (0,'')
+        dO = digest(())
+        assert insert('a', ()) == (('B', (), ('a', dO, dO), ()), ())
+        self.assertRaises(ValueError, search, 'notfound', ())
+        assert digest(()) == (0,hash(()))
 
     def _test_reconstruct(self, D, n):
         for q in range(n):
-            R = search(q, D)
-            assert query(q, R) == query(q, D)
+            R = reconstruct(digest(D), search(q, D)[1])
+            assert search(q, R) == search(q, D)
 
     def test_sequential(self):
         D = ()
         for i in range(10):
-            D = insert(i, D)
+            D, _ = insert(i, D)
             assert size(D) == i+1
             self._test_reconstruct(D, 10)
             invariants(D)
@@ -90,46 +90,53 @@ class RedBlackTest(unittest.TestCase):
         for _ in range(n):
             i = random.randint(0,n)
             if not i in ref:
-                D = insert(i, D)
+                D, _ = insert(i, D)
                 ref.add(i)
             invariants(D)
             d0 = digest(D)
             for i in range(n):
-                assert (query(i, D) == i) == (i in ref)
+                assert (search(i, D)[0] == i) == (i in ref)
 
-    def test_delete(self, n=200):
+    def test_delete_random(self, n=300):
         for _ in range(n):
             D = ()
-            values = range(16)
+            values = range(11)
             random.shuffle(values)
-            for i in values: D = insert(i, D)
+            for i in values: D, _ = insert(i, D)
             random.shuffle(values)
             for i in values:
-                R = delete(i, D)
-                assert query(i, R) != i
-                invariants(R)
+                S, VO = delete(i, D)
+                R = reconstruct(digest(D), VO)
+                SR, _VO = delete(i, R)
+                assert _VO == VO
+                if S:
+                    assert search(i, S)[0] != i
+                    assert digest(SR) == digest(S)
+                invariants(S)
+                D = S
 
     def test_insert_search(self):
-        T = ()
-        for i in range(0, 8, 2): T = insert(i, T)
+        D = ()
+        for i in range(0, 8, 2): D, _ = insert(i, D)
         for i in (-1,1,3,5,7):
-            R = search(i, T)
-            invariants(T)
-            assert (search(i, insert(i, T)) == 
-                    search(i, insert(i, R)))
+            R = reconstruct(digest(D), search(i, D)[1])
+            invariants(D)
+            S, VO = insert(i, D)
+            SR, _VO = insert(i, R)
+            assert digest(S) == digest(SR)
+            assert _VO == VO
 
 
 class AuthSelectRedBlackTest(unittest.TestCase):
     def setUp(self):
-        global digest, search, insert, select, verify, rank
+        global reconstruct, digest, insert, search, select, rank
         H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()
         RB = RedBlack(H)
+        reconstruct = RB.reconstruct
         digest = RB.digest
-        search = RB.search
         insert = RB.insert
         select = RB.select
-        verify = RB.verify
-        query = RB.query
+        search = RB.search
         rank = RB.rank
 
     def test_auth(self):
@@ -137,48 +144,54 @@ class AuthSelectRedBlackTest(unittest.TestCase):
         D = ()
         values = range(N)
         random.shuffle(values)
-        for i in values[:-10]: D = insert(i, D)
+        for i in values[:-10]: D, _ = insert(i, D)
         for i in values[-10:]:
-            R = search(i, D)
-            assert verify(digest(D), R)
-            invariants(D)
+            S, VO = insert(i, D)
+            R = reconstruct(digest(D), VO)
             assert search(i, R) == search(i, D)
-            assert search(i, insert(i, R)) == search(i, insert(i, D))
-            assert digest(insert(i, R)) == digest(insert(i, D))
+            SR, _VO = insert(i, R)
+            assert _VO == VO
+            assert search(i, SR) == search(i, S)
+            assert digest(SR) == digest(S)
 
     def test_select(self):
         N = 100
         D = ()
         values = range(N)
         random.shuffle(values)
-        for v in values: D = insert(v, D)
+        for v in values: D, _ = insert(v, D)
         d0 = digest(D)
 
         for _ in range(100):
             i = random.randint(0,N-1)
             v = select(i, D)
-            R = search(v, D)
             assert i == rank(v, D)
-            assert verify(d0, R)
+            _, VO = search(v, D)
+            R = reconstruct(d0, VO)
             assert i == rank(v, R)
             assert v == select(i, R)
 
 
 RB = RedBlack()
-balance = RB.balance
 digest = RB.digest
-search = RB.search
 insert = RB.insert
 delete = RB.delete
-query = RB.query
+search = RB.search
 size = RB.size
 
-D = ()
-for i in range(10):
-    D = insert(i, D)
+def test_delete(n=100):
+    for _ in range(n):
+        D = ()
+        values = range(18)
+        random.shuffle(values)
+        for i in values: D = insert(i, D)
+        random.shuffle(values)
+        for i in values[1:]:
+            R, P = delete(i, D)
+            assert search(i, R)[0] != i
+            invariants(R)
 
-D = delete(0, D)
-#print D
 
 if __name__ == '__main__':
     unittest.main()
+
