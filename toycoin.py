@@ -66,7 +66,7 @@ B:
 """
 
 from proofofthroughput import do_work, verify_work
-from redblack import RedBlack
+from redblack import SelectRedBlack
 
 import random
 PRNG = lambda seed: random.Random(seed)
@@ -81,7 +81,7 @@ class Transaction():
         self.block_window = block_window
         H = lambda x: '' if not x else SHA256.new(str(x)).hexdigest()[:8]
         self.H = H
-        self.RB = RB = RedBlack(H)
+        self.RB = RB = SelectRedBlack(H)
         self.size = RB.size
         self.search = RB.search
         self.digest = RB.digest
@@ -176,4 +176,3 @@ class Block():
 
     def verify_block(self, B, VO):
         pass
-

@@ -152,8 +152,8 @@ def HashThroughput():
     return F, Sample, Verify
 
 
-from redblack import RedBlack
-RB = RedBlack(H)
+from redblack import SelectRedBlack
+RB = SelectRedBlack(H)
 reconstruct = RB.reconstruct
 digest = RB.digest
 select = RB.select

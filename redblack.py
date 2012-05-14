@@ -2,8 +2,8 @@
 Andrew Miller <amiller@cs.ucf.edu>
 May 2012
 
-This RedBlack tree is an authenticated dictionary, based on a balanced 
-binary search tree [1]. The tree is balanced strictly, so that all usual
+This RedBlack tree is an Authenticated Dictionary [1], based on a balanced 
+binary search tree. The tree is balanced strictly, so that all usual
 operations can be performed in O(log N) worst-case time. The tree is augmented
 with secure hashes for each node (forming a Merkle tree), which allows the
 correctness of each operation to be verified in O(log N) time. Only O(1) of
@@ -12,23 +12,38 @@ correctness of each operation to be verified in O(log N) time. Only O(1) of
 Additionally, the dictionary supports selection of an element by its rank,
 which is useful for choosing set elements at random for a Proof-of-Throughput.
 
+Using a balanced tree as an Authenticated Data Structure requires committing
+to a particular balancing behavior, since Verification occurs by simulating
+the computation on a pruned tree. This implementation uses a combination of
+Okasaki style balancing for insert [2] and a more verbose version of 
+delete [3,4].
+
+
 [1] Persistent Authenticated Dictionaries and Their Applications
+    Agnostopolous, Goodrich, and Tamassia.
     http://cs.brown.edu/people/aris/pubs/pad.pdf
-[2] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
+
+[2] Purely Functional Data Structures
+    Chris Okasaki
+    http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps
+
 [3] Missing method: How to delete from Okasaki's red-black trees
+    Matt Might
     http://matt.might.net/articles/red-black-delete/
-[4] Andrew Appel. Efficient Verified Red-Black Trees
+
+[4] Efficient Verified Red-Black Trees
+    Andrew Appel
     http://www.cs.princeton.edu/~appel/papers/redblack.pdf
+
 
 
 Type definitions and common notations:
 ======================================
 
 RedBlack():
-    A general purpose RedBlack tree that is easy to augment because it allows
-    an arbitrary 'digest' field to be computed for each node. The digest is
-    a pure function of the values of its children - this means the digests are
-    maintained correctly even when nodes are inserted and deleted.
+    A RedBlack tree that can be augmented with an arbitrary  'digest' field 
+    which is recomputed for consistency at each node. The digests are
+    maintained correctly even when elements are inserted and deleted.
 
     This tree includes a 'size' field which is used to implement the select() 
     and rank() functions.
@@ -77,10 +92,10 @@ R:
     All of the tree operations can be performed on a reconstruction, just as
     though it were an original tree. Operations on a reconstructed tree are
     guaranteed to produce the same results as with the original (or else raise
-    an exception). 
+    an exception).
 
-    These invariants are the basis for a correctness and security claim about 
-    this implementation:
+    These invariants are the basis for a) acorrectness and b) a security claim 
+    about this implementation:
 
          for all D, VO:
              R = reconstruct(d0, VO)
@@ -102,25 +117,20 @@ R:
 """
 import math
 
-class RedBlack():
-    """
-    This tree is parameter
+class RedBlack(object):
     """
 
-    def __init__(self, H = hash):
+    """
+
+    def __init__(self, H=hash):
         """
         Args:
              H (optional): a collision-resistant hash function that
-                           takes arguments of the form:
-             
+                           takes arguments of the form:             
                   H(())
                   H((c, k, dL, dR))
         """
-        def _H(d):
-            if not d: return (0, H(()))
-            (c, k, dL, dR) = d
-            return (dL[0] + dR[0] or 1, H(d))
-        self.H = _H
+        self.H = H
 
 
     def digest(self, D):
@@ -134,11 +144,9 @@ class RedBlack():
 
 
     def reconstruct(self, d0, VO):
-        (N, _) = d0
         dO = self.digest(())
         # The worst case scenario for a VO depends on the size of the tree
         # TODO: Work out this expression with a compelling diagram
-        assert len(VO) <= 3*math.ceil(math.log(N+1,2))+4
         table = dict(VO)
         def _recons(d0):
             if d0 == dO or d0 not in table: return ()
@@ -207,7 +215,6 @@ class RedBlack():
         dO = self.digest(())
         d0 = self.digest(D)
         stash, VO = self._stash()
-        #print 'delete called'
         def rehash(D):
             """
             Recompute the digests only when the subtrees are available. 
@@ -225,9 +232,7 @@ class RedBlack():
             stash(lx[1], lL)
             stash(lx[2], lR)
             if lc == 'B':
-                #print 'recolor Left'
                 return balance(('B', turnR(L), x, R)), c=='B'
-            #print 'restructure Left'
             stash(lR[2][1], lR[1])
             stash(lR[2][2], lR[3])
             assert c == 'B' and lc == 'R' and lR[0] == 'B'
@@ -239,9 +244,7 @@ class RedBlack():
             stash(rx[1], rL)
             stash(rx[2], rR)
             if rc == 'B':
-                #print 'recolor Right'
                 return balance(('B', L, x, turnR(R))), c=='B'
-            #print 'restructure Right'
             stash(rL[2][1], rL[1])
             stash(rL[2][2], rL[3])
             assert c == 'B' and rc == 'R' and rL[0] == 'B'
@@ -326,6 +329,28 @@ class RedBlack():
                        D)
 
 
+
+"""
+Further augmentations of the digest that provide extra functionality
+"""
+
+class SelectRedBlack(RedBlack):
+    """
+    Include the size of the tree in the digest. This allows for efficient
+    selection by rank/index.
+    """
+    def __init__(self, H=hash):
+        def _H(d):
+            if not d: return (0, H(()))
+            (c, k, dL, dR) = d
+            return (dL[0] + dR[0] or 1, H(d))
+        super(SelectRedBlack,self).__init__(_H)
+
+    def reconstruct(self, d0, VO):
+        (N, _) = d0
+        assert len(VO) <= 3*math.ceil(math.log(N+1,2))+4
+        return super(SelectRedBlack,self).reconstruct(d0, VO)
+
     def select(self, i, D):
         dO = self.digest(())
         while D:
@@ -334,7 +359,6 @@ class RedBlack():
             if i == 0 and dL == dR == dO: return k
             (D,i) = (L,i) if i < j else (R,i-j)
         raise ValueError
-
 
     def rank(self, q, D):
         dO = self.digest(())
@@ -346,7 +370,32 @@ class RedBlack():
             (D,i) = (L,i) if q <= k else (R,i+j)
         raise ValueError
 
-
     def size(self, D):
         (N, _) = self.digest(D)
         return N
+
+
+class WeightSelectRedBlack(SelectRedBlack):
+    """
+    Further augment the tree to contain the 'weight' for each tree,
+    where the weight is taken from the node key.
+    """
+    def __init__(self, H=hash):
+        dO = H(())
+        def _H(d):
+            if not d: return (0, (0, H(())))
+            (c, k, dL, dR) = d
+            W = (k[1] if dL[1][1] == dO and dR[1][1] == dO else 
+                 dL[1][0] + dR[1][0])
+            return dL[0] + dR[0] or 1, (W, H(d))
+        super(SelectRedBlack,self).__init__(_H)
+
+
+    def select_weight(self, i, D):
+        dO = self.digest(())
+        while D:
+            c, L, (k, dL, dR), R = D
+            j = dL[1][0]
+            if dL == dR == dO: return k, i
+            (D,i) = (L,i) if i < j else (R,i-j)
+        raise ValueError
