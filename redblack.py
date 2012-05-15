@@ -145,8 +145,6 @@ class RedBlack(object):
 
     def reconstruct(self, d0, VO):
         dO = self.digest(())
-        # The worst case scenario for a VO depends on the size of the tree
-        # TODO: Work out this expression with a compelling diagram
         table = dict(VO)
         def _recons(d0):
             if d0 == dO or d0 not in table: return ()
@@ -328,6 +326,26 @@ class RedBlack(object):
                        match(B,a,(x,m,_),(R,b,(y,n,_),(R,c,(z,o,p),d))) or
                        D)
 
+    def replay_proofs(self, d0, VOs):
+        digest = self.digest
+        reconstruct = self.reconstruct
+        it = iter(VOs)
+        def proof(d0):
+            try:
+                while True:
+                    D, _ = yield reconstruct(d0, it.next())
+                    d0 = digest(D)
+            except StopIteration:
+                yield D
+        return proof(d0)
+
+    def record_proofs(self, D):
+        VOs = []
+        def proof(D):
+            while True:
+                D, VO = yield D
+                VOs.append(VO)
+        return proof(D), VOs
 
 
 """
@@ -347,6 +365,8 @@ class SelectRedBlack(RedBlack):
         super(SelectRedBlack,self).__init__(_H)
 
     def reconstruct(self, d0, VO):
+        # The worst case scenario for a VO depends on the size of the tree
+        # TODO: Work out this expression with a compelling diagram
         (N, _) = d0
         assert len(VO) <= 3*math.ceil(math.log(N+1,2))+4
         return super(SelectRedBlack,self).reconstruct(d0, VO)

@@ -1,8 +1,8 @@
 """
-PAD:
+A:
     A Persistent Authenticated Dictionary (PAD) is constructed as a tree of
     trees 
-        (D,d) = PAD
+        (D,d) = A
 
     where 
         D is the upper-layer tree, and 
@@ -46,15 +46,16 @@ select = WSRB.select
 class PersistentAuthDict(object):
     def __init__(self, RB):
         self.RB = RB
+        self.WSRB = WSRB
 
 
-    def digest(self, PAD):
-        (D,_) = PAD
+    def digest(self, A):
+        (D,_) = A
         return digest(D)
 
 
-    def insert(self, q, PAD):
-        (D,d) = PAD
+    def insert(self, q, A):
+        (D,d) = A
         (N,_) = digest(D)
 
         # Find the last (most recent) tree
@@ -79,8 +80,8 @@ class PersistentAuthDict(object):
         return (D,d), (VO_D, dE_old, VO_E)
 
 
-    def search(self, q, PAD, t=None):
-        (D,d) = PAD
+    def search(self, q, A, t=None):
+        (D,d) = A
         (N,_) = digest(D)
         if t is None: ((t, _), _) = select(N-1,D)
         ((_t, dE), _), VO_D = search(((t, None), None), D)

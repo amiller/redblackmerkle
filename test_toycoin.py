@@ -1,10 +1,13 @@
-from collections import defaultdict
-
 import redblack; reload(redblack)
+import persistent; reload(persistent)
+import notary; reload(notary)
 import toycoin; reload(toycoin)
 
-#from toycoin import 
-#from toycoin import search, digest, size, select, verify, insert, delete, query
+
+from persistent import PersistentAuthDict
+from notary import Directory, Verifier, NotaryProtocol
+
+from collections import defaultdict
 
 verify_signature = lambda dTx, pub, sig: (sig.startswith('SIGNED_'+pub)
                                           and sig.endswith(dTx))
@@ -15,24 +18,27 @@ def sign(dTx, priv):
 
 Transaction = toycoin.Transaction(verify_signature)
 digest_transaction = Transaction.digest_transaction
-verify_transaction = Transaction.verify_transaction
 apply_transaction = Transaction.apply_transaction
-digest = Transaction.digest
-select = Transaction.select
-Block = toycoin.Block(window=None)
+
+PAD = PersistentAuthDict(Transaction.RB)
+protocol = NotaryProtocol(apply_transaction, PAD)
 
 
 class Client():
-    def __init__(self, d0):
+
+    def __init__(self, d0, verifier):
         self.d0 = d0
         self.pubs = 'A', 'B'
         self.privs = dict(A='PRIVKEY_Alice', B='PRIVKEY_Bob')
         self.spendable = defaultdict(lambda: {})
+        self.verifier = verifier
 
-    def apply_transaction(self, Tx, VO):
-        self.d0 = verify_transaction(self.d0, Tx, VO)
+    def apply_transaction(self, Tx):
+        verifier = self.verifier
+        Tx, _ = verifier.directory.query_transaction(verifier.t)
+        verifier.advance()
+
         (inps, outs, _) = Tx
-
         for inp in inps:
             for table in self.spendable.values():
                 try: del table[inp]
@@ -59,51 +65,31 @@ class Client():
         return (inps, outs, sigs)
 
 
-class Server():
-    def __init__(self, D):
-        self.D = D
-        self.pendingCommits = []
 
-    def submit_transaction(self, Tx):
-        """
-        Validate the transaction and add it to a pool. Store the updated tree 
-        along with it, so we can check new transactions against this one. It 
-        only requires O(M * log N) storage to hold M updated trees, only 
-        O(log N) nodes must be rebuilt.
-        """
-        _, D = pendingCommits[-1]
-        d0 = digest(D)
-        D, VO = apply_transaction(Tx, D)
-        assert verify_transaction(d0, Tx, VO)
-        self.pendingCommits.append((Tx, D))
+# Alice starts off with 100 tokens
+directory = Directory(protocol)
 
-    def submit_block(self, B):
-        """
-        Block validation.
+genesis = (('genesis',0), ('A', 100))
 
-        1. First, check that the proof-of-work is valid, to guard againt
-           DoS.
-        2. Next, check all transactions against the current
-        """
-        pass
+def initial_tree():
+    E,_ = protocol.RB.insert(genesis, ())
+    dE = protocol.RB.digest(E)
+    D,_ = protocol.WSRB.insert(((0,dE), 1), ())
+    d = {dE: E}
+    A = (D,d)
+    return A, dE
 
-    def apply_transaction(self, Tx):
-        self.D, VO = apply_transaction(Tx, self.D)
-        return VO    
+directory.A, d0 = initial_tree()
+verifier = Verifier(d0, 0, protocol, directory)
 
-
-# Alice starts off with all 100 of the tokens
-D, _ = apply_transaction(((),(('A', 100),),()), ())
-server = Server(D)
-client = Client(digest(D))
-(inp, (pub,amt)) = select(0, D)
-client.spendable[pub][inp] = amt
+client = Client(d0, Verifier(d0, 0, protocol, directory))
+client.spendable[genesis[1][0]][genesis[0]] = genesis[1][1]
 
 def send_payment(src, dst, amt):
     Tx = client.make_transaction(src, dst, amt)
-    #print Tx
-    VO = server.apply_transaction(Tx)
-    client.apply_transaction(Tx, VO)
+    directory.commit_transaction(Tx)
+    verifier.advance()
+    client.apply_transaction(Tx)
 
 # Make some transactions
 for _ in range(10):

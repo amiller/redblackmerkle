@@ -3,24 +3,6 @@ Andrew Miller <amiller@cs.ucf.edu>
 May 2012
 
 
-An alternate proof-of-work scheme for Bitcoin. Instead of merely computing
-hashes, miners compete by demonstrating high-throughput access to their
-'unspent coins' database.
-
-This is achieved by storing each 'unspent coin' as an element in a data-
-structure such that elements can be selected pseudo-randomly (uniformly)
-and verified against a known digest (i.e., the root hash of a Merkle tree).
-The work consists of k iterations where the data for each selected element
-is used to determine the selection for next iteration.
-
-The only way to build a machine that's good at producing this proof-of-work
-is to build a machine that's also efficient at validating transactions. This
-will increase the decentralized of Bitcoin, since the cost of maintaining
-the 'unspent coins' database is currently 'unpaid overtime', so-to-speak. In
-fact, many miners participate in pools without storing their own copy of the
-state, foregoing their ability to independently verify transactions.
-
-
 D:
     An 'Unspent Inputs' database. It's an AuthSelectRedBlack.
 
@@ -77,102 +59,49 @@ from Crypto.Hash import SHA256
 class Transaction():
 
     def __init__(self, verify_signature, block_window=None):
+        self.H = lambda x: '' if not x else SHA256.new(str(x)).hexdigest()[:8]
+        self.RB = SelectRedBlack(self.H)
         self.verify_signature = verify_signature
         self.block_window = block_window
-        H = lambda x: '' if not x else SHA256.new(str(x)).hexdigest()[:8]
-        self.H = H
-        self.RB = RB = SelectRedBlack(H)
-        self.size = RB.size
-        self.search = RB.search
-        self.digest = RB.digest
-        self.select = RB.select
-        self.insert = RB.insert
-        self.delete = RB.delete
-        self.reconstruct = RB.reconstruct
 
-
-    """
-    Transactions and unspent-inputs database
-    ========================================
-    """
 
     def digest_transaction(self, Tx):
         (inps, outps, sigs) = Tx
         return self.H((inps, outps))  # Exclude sig from the digest
 
 
-    def apply_transaction(self, Tx, D):
-        """
-        Updates the tree and returns a Verification Object that can
-        be used to simulate the transaction
-        """
+    def apply_transaction(self, d0, Tx, proof):
+        search = self.RB.search
+        delete = self.RB.delete
+        insert = self.RB.insert
+
         (inps, outs, sigs) = Tx
         dTx = self.digest_transaction(Tx)
 
-        # First delete each of the old inputs
-        inpPs = []
-        for inp in inps:
-            v, _ = self.search((inp,None), D)
-            D, P = self.delete(v, D)
-            inpPs.append(P)
-
-        # Then insert each of the new outputs
-        outPs = []
-        for i, v in enumerate(outs):
-            D, P = self.insert(((dTx,i), v), D)
-            outPs.append(P)
-
-        return D, (inpPs, outPs)
-    
-
-    def verify_transaction(self, d0, Tx, VO):
-        (inps, outs, sigs) = Tx
-        (inpPs, outPs) = VO
-        dTx = self.digest_transaction(Tx)
+        D = proof.next()
 
         total_out = sum(amt for (_, amt) in outs)
         total_in = 0
 
-        # First simulate removing each of the old inputs
-        assert len(inps) == len(sigs) == len(inpPs)
-        for inp, P, sig in zip(inps, inpPs, sigs):
-            R = self.reconstruct(d0, P)
-            (_inp, (pub, amt)), _ = self.search((inp, None), R)
+        # First remove each of the old inputs
+        for inp, sig in zip(inps, sigs):
+            (_inp, (pub, amt)), _ = search((inp, None), D)
             assert _inp == inp
             assert self.verify_signature(dTx, pub, sig)
             assert amt > 0
             total_in += amt
-            d0 = self.digest(self.delete((inp, (pub,amt)), R)[0])
+            out = (pub,amt)
+            D = proof.send(delete((inp, out), D))
 
         assert total_in > 0
         assert total_in == total_out
 
-        # Then simulate insert each of the new outputs
-        assert len(outs) == len(outPs)
-        for i, (out, P) in enumerate(zip(outs, outPs)):
-            R = self.reconstruct(d0, P)
-            if R:
-                (_dTxi, _), _ = self.search(((dTx,i), None), R)
-                assert _dTxi != (dTx,i)
-            d0 = self.digest(self.insert(((dTx,i),out), R)[0])
+        # Then insert each of the new outputs
+        for i, out in enumerate(outs):
+            inp = (dTx,i)
+            if D:
+                (_dTxi, _), _ = search((inp, None), D)
+                assert _dTxi != inp
+            D = proof.send(insert((inp, out), D))
 
-        return d0
-
-
-
-class Block():
-    def __init__(self, window=None):
-        pass
-    """
-    Blockchain and proof-of-throughput functions
-    ============================================
-    """
-
-    def digest_block(self):
-        pass
-
-    def apply_block():
-        pass
-
-    def verify_block(self, B, VO):
-        pass
+        return D
