@@ -74,24 +74,27 @@ class Transaction():
         search = self.RB.search
         delete = self.RB.delete
         insert = self.RB.insert
+        walk = self.RB.walk
+        record_walk = self.RB.record_walk
 
         (inps, outs, sigs) = Tx
         dTx = self.digest_transaction(Tx)
 
-        D = proof.next()
-
         total_out = sum(amt for (_, amt) in outs)
         total_in = 0
 
+        D = proof.next()
+
         # First remove each of the old inputs
         for inp, sig in zip(inps, sigs):
-            (_inp, (pub, amt)), _ = search((inp, None), D)
+            (_inp, (pub, amt)) = search((inp, None), D)
             assert _inp == inp
             assert self.verify_signature(dTx, pub, sig)
             assert amt > 0
             total_in += amt
             out = (pub,amt)
-            D = proof.send(delete((inp, out), D))
+            w, VO = record_walk(D)
+            D = proof.send((delete((inp, out), w), VO))
 
         assert total_in > 0
         assert total_in == total_out
@@ -100,8 +103,8 @@ class Transaction():
         for i, out in enumerate(outs):
             inp = (dTx,i)
             if D:
-                (_dTxi, _), _ = search((inp, None), D)
+                (_dTxi, _) = search((inp, None), D)
                 assert _dTxi != inp
-            D = proof.send(insert((inp, out), D))
-
+            w, VO = record_walk(D)
+            D = proof.send((insert((inp, out), w), VO))
         return D

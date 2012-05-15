@@ -4,14 +4,15 @@ May 2012
 
 """
 
-from persistent import PersistentAuthDict
+from redblack import WeightSelectRedBlack
+from Crypto.Hash import SHA256
 
 
 class NotaryProtocol(object):
-    def __init__(self, apply_transaction, PAD):
-        self.PAD = PAD
-        self.RB = PAD.RB
-        self.WSRB = PAD.WSRB
+    def __init__(self, apply_transaction, RB):
+        H = lambda x: '' if not x else SHA256.new(str(x)).hexdigest()[:8]
+        self.WSRB = WeightSelectRedBlack(H)
+        self.RB = RB
         self.apply_transaction = apply_transaction
 
 
@@ -31,6 +32,7 @@ class Directory(object):
         insert = protocol.WSRB.insert
         select = protocol.WSRB.select
         lower = protocol.RB
+        walk = protocol.WSRB.walk
 
         (D,d) = self.A
         d = dict(d)
@@ -38,7 +40,7 @@ class Directory(object):
 
         # Fetch the most recent tree from our timeline
         if N > 0:
-            ((t,dE),_) = select(N-1, D)
+            ((t,dE),_) = select(N-1, walk(D))
             E = d[dE]
         else:
             t, E = -1, ()
@@ -52,7 +54,7 @@ class Directory(object):
         # Insert the updated tree into the upper-level tree
         (W,_) = dE
         d[dE] = E
-        D, _ = insert(((t+1, dE), W), D)
+        D = insert(((t+1, dE), W), walk(D))
 
         print "Directory advancing to", lower.digest(E)
 
@@ -65,10 +67,11 @@ class Directory(object):
         protocol = self.protocol
         lower = protocol.RB
         upper = protocol.WSRB
+        walk = lower.walk
 
         # Grab our snapshot of the data at time t
         (D,d) = self.A
-        ((_t,dE),_),_ = upper.search(((t, None), None), D)
+        ((_t,dE),_) = upper.search(((t, None), None), walk(D))
         assert _t == t
         Tx = self.txs[t]
         E = d[dE]

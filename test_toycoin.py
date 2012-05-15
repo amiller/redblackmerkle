@@ -4,7 +4,6 @@ import notary; reload(notary)
 import toycoin; reload(toycoin)
 
 
-from persistent import PersistentAuthDict
 from notary import Directory, Verifier, NotaryProtocol
 
 from collections import defaultdict
@@ -18,26 +17,16 @@ def sign(dTx, priv):
 
 Transaction = toycoin.Transaction(verify_signature)
 digest_transaction = Transaction.digest_transaction
-apply_transaction = Transaction.apply_transaction
-
-PAD = PersistentAuthDict(Transaction.RB)
-protocol = NotaryProtocol(apply_transaction, PAD)
-
+protocol = NotaryProtocol(Transaction.apply_transaction, Transaction.RB)
 
 class Client():
 
-    def __init__(self, d0, verifier):
-        self.d0 = d0
+    def __init__(self):
         self.pubs = 'A', 'B'
         self.privs = dict(A='PRIVKEY_Alice', B='PRIVKEY_Bob')
         self.spendable = defaultdict(lambda: {})
-        self.verifier = verifier
 
     def apply_transaction(self, Tx):
-        verifier = self.verifier
-        Tx, _ = verifier.directory.query_transaction(verifier.t)
-        verifier.advance()
-
         (inps, outs, _) = Tx
         for inp in inps:
             for table in self.spendable.values():
@@ -70,11 +59,12 @@ class Client():
 directory = Directory(protocol)
 
 genesis = (('genesis',0), ('A', 100))
+walk = protocol.RB.walk
 
 def initial_tree():
-    E,_ = protocol.RB.insert(genesis, ())
+    E = protocol.RB.insert(genesis, walk(()))
     dE = protocol.RB.digest(E)
-    D,_ = protocol.WSRB.insert(((0,dE), 1), ())
+    D = protocol.WSRB.insert(((0,dE), 1), walk(()))
     d = {dE: E}
     A = (D,d)
     return A, dE
@@ -82,7 +72,7 @@ def initial_tree():
 directory.A, d0 = initial_tree()
 verifier = Verifier(d0, 0, protocol, directory)
 
-client = Client(d0, Verifier(d0, 0, protocol, directory))
+client = Client()
 client.spendable[genesis[1][0]][genesis[0]] = genesis[1][1]
 
 def send_payment(src, dst, amt):

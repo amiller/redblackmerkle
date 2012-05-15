@@ -19,6 +19,9 @@ digest = RB.digest
 search = RB.search
 delete = RB.delete
 size = RB.size
+walk = RB.walk
+record_walk = RB.record_walk
+replay_walk = RB.replay_walk
 
 class RedBlackSelectThroughputTest(unittest.TestCase):
     def setUp(self):
@@ -28,7 +31,7 @@ class RedBlackSelectThroughputTest(unittest.TestCase):
         D = ()
         for v in values: 
             table[H(v)] = v
-            D, _ = insert(H(v), D)
+            D = insert(H(v), D)
         k = 64
         N = size(D)
         self.table = table
@@ -38,7 +41,8 @@ class RedBlackSelectThroughputTest(unittest.TestCase):
         # Construct the proof of work functions
         def F(d):
             v = select(d, D)
-            _, VO = delete(v, D)
+            w, VO = record_walk(D)
+            delete(v, w)
             data = table[v]
             return (data, VO)
         self.F = F
@@ -48,7 +52,9 @@ class RedBlackSelectThroughputTest(unittest.TestCase):
         def Verify(d, r):
             (data, VO) = r
             R = reconstruct(d0, VO)
-            assert delete(select(d, R), R)[1] == VO
+            w, _VO = record_walk(R)
+            delete(select(d, R), w)
+            assert _VO == VO
             assert H(data) == select(d, R)
             return True
         self.Verify = Verify
@@ -142,7 +148,7 @@ class ProofOfThroughputTest(unittest.TestCase):
         values = range(N)
         random.shuffle(values)
         D = ()
-        for i in values: D, _ = insert(i, D)
+        for i in values: D = insert(i, D)
 
         notes = dict(name="Selecting from an ordered set, including the "
                      "Merkle tree path",

@@ -6,8 +6,6 @@ import redblack; reload(redblack)
 from redblack import RedBlack
 from redblack import SelectRedBlack
 from redblack import WeightSelectRedBlack
-import persistent; reload(persistent)
-from persistent import PersistentAuthDict
 
 def invariants(RB, D):
     # The following invariants hold at all times for the red-black search tree
@@ -66,8 +64,9 @@ class RedBlackTest(unittest.TestCase):
         digest = self.RB.digest
         search = self.RB.search
         insert = self.RB.insert
+        walk = self.RB.walk
         dO = digest(())
-        assert insert('a', ()) == (('B', (), ('a', dO, dO), ()), ())
+        assert insert('a', ()) == ('B', (), ('a', dO, dO), ())
         self.assertRaises(ValueError, search, '', ())
         assert digest(()) == hash(())
 
@@ -75,25 +74,37 @@ class RedBlackTest(unittest.TestCase):
         search = self.RB.search
         reconstruct = self.RB.reconstruct
         digest = self.RB.digest
+        walk = self.RB.walk
+        d0 = digest(D)
         for q in range(n):
-            R = reconstruct(digest(D), search(q, D)[1])
+            w, VO = record_walk(D)
+            k = search(q, w)
+
+            assert k == search(q, replay_walk(d0, VO))
+
+            R = reconstruct(d0, VO)
             assert search(q, R) == search(q, D)
+
+            w, _VO = record_walk(R)
+            search(q, w)
+            assert VO == VO
 
     def test_random(self, n=100):
         insert = self.RB.insert
         digest = self.RB.digest
         search = self.RB.search
+        walk = self.RB.walk
         D = ()
         ref = set()
         for _ in range(n):
             i = random.randint(0,n)
             if not i in ref:
-                D, _ = insert(i, D)
+                D = insert(i, D)
                 ref.add(i)
             invariants(self.RB, D)
             d0 = digest(D)
             for i in range(n):
-                assert (search(i, D)[0] == i) == (i in ref)
+                assert (search(i, D) == i) == (i in ref)
 
     def test_delete_random(self, n=300):
         reconstruct = self.RB.reconstruct
@@ -101,19 +112,25 @@ class RedBlackTest(unittest.TestCase):
         search = self.RB.search
         digest = self.RB.digest
         delete = self.RB.delete
+        record_walk = self.RB.record_walk
+        replay_walk = self.RB.replay_walk
+        walk = self.RB.walk
         for _ in range(n):
             D = ()
             values = range(11)
             random.shuffle(values)
-            for i in values: D, _ = insert(i, D)
+            for i in values: D = insert(i, D)
             random.shuffle(values)
             for i in values:
-                S, VO = delete(i, D)
+                w, VO = record_walk(D)
+                S = delete(i, w)
                 R = reconstruct(digest(D), VO)
-                SR, _VO = delete(i, R)
+                w, _VO = record_walk(R)
+                SR  = delete(i, w)
                 assert _VO == VO
+                delete(i, replay_walk(digest(D), VO))
                 if S:
-                    assert search(i, S)[0] != i
+                    assert search(i, S) != i
                     assert digest(SR) == digest(S)
                 invariants(self.RB, S)
                 D = S
@@ -123,31 +140,50 @@ class RedBlackTest(unittest.TestCase):
         insert = self.RB.insert
         search = self.RB.search
         digest = self.RB.digest
+        record_walk = self.RB.record_walk
+        replay_walk = self.RB.replay_walk
+        walk = self.RB.walk
         D = ()
-        for i in range(0, 8, 2): D, _ = insert(i, D)
+        for i in range(0, 8, 2): D = insert(i, D)
         for i in (-1,1,3,5,7):
-            R = reconstruct(digest(D), search(i, D)[1])
-            invariants(self.RB, D)
-            S, VO = insert(i, D)
-            SR, _VO = insert(i, R)
-            assert digest(S) == digest(SR)
+            w, VO = record_walk(D)
+            search(i, w)
+            
+            R = reconstruct(digest(D), VO)
+            search(i, R)
+
+            w = replay_walk(digest(D), VO)
+            search(i, w)
+
+            w, _VO = record_walk(R)
+            search(i, w)
             assert _VO == VO
+
+            invariants(self.RB, D)
+            S = insert(i, D)
+            SR = insert(i, R)
+            assert digest(S) == digest(SR)
 
     def test_auth(self):
         reconstruct = self.RB.reconstruct
         insert = self.RB.insert
         search = self.RB.search
         digest = self.RB.digest
+        walk = self.RB.walk
+        record_walk = self.RB.record_walk
         N = 100
         D = ()
         values = range(N)
         random.shuffle(values)
-        for i in values[:-10]: D, _ = insert(i, D)
+        for i in values[:-10]: D = insert(i, D)
         for i in values[-10:]:
-            S, VO = insert(i, D)
+            w, VO = record_walk(D)
+            S = insert(i, w)
             R = reconstruct(digest(D), VO)
             assert search(i, R) == search(i, D)
-            SR, _VO = insert(i, R)
+
+            w, _VO = record_walk(R)
+            SR = insert(i, w)
             assert _VO == VO
             assert search(i, SR) == search(i, S)
             assert digest(SR) == digest(S)
@@ -162,15 +198,19 @@ class SelectRedBlackTest(unittest.TestCase):
     def test_sequential(self):
         insert = self.RB.insert
         size = self.RB.size
+        walk = self.RB.walk
         D = ()
         for i in range(10):
-            D, _ = insert(i, D)
+            D = insert(i, D)
             assert size(D) == i+1
             invariants(self.RB, D)
 
     def test_select(self):
         reconstruct = self.RB.reconstruct
         insert = self.RB.insert
+        record_walk = self.RB.record_walk
+        replay_walk = self.RB.replay_walk
+        walk = self.RB.walk
         search = self.RB.search
         digest = self.RB.digest
         select = self.RB.select
@@ -179,14 +219,17 @@ class SelectRedBlackTest(unittest.TestCase):
         D = ()
         values = range(N)
         random.shuffle(values)
-        for v in values: D, _ = insert(v, D)
+        for v in values: D = insert(v, D)
         d0 = digest(D)
 
         for _ in range(100):
             i = random.randint(0,N-1)
             v = select(i, D)
             assert i == rank(v, D)
-            _, VO = search(v, D)
+
+            record, VO = record_walk(D)
+            k = search(v, record)
+
             R = reconstruct(d0, VO)
             assert i == rank(v, R)
             assert v == select(i, R)
@@ -201,6 +244,7 @@ class WeightSelectRedBlackTest(unittest.TestCase):
         insert = self.RB.insert
         digest = self.RB.digest
         select_weight = self.RB.select_weight
+        walk = self.RB.walk
         within_eps = lambda a,b: abs(a-b) < 1e-5
         D = ()
         N = 100
@@ -210,7 +254,7 @@ class WeightSelectRedBlackTest(unittest.TestCase):
         total = 0.
         for i,w in enumerate(weights):
             total += w
-            D,_ = insert((i,w), D)
+            D = insert((i,w), D)
             (_, (W, _)) = digest(D)
             assert within_eps(W, total)
 
@@ -220,40 +264,6 @@ class WeightSelectRedBlackTest(unittest.TestCase):
             assert cumpdf[i] <= r
             assert within_eps(cumpdf[i] + residue, r)
             assert i == N-1 or cumpdf[i+1] > r
-
-
-class PersistentAuthDictTest(unittest.TestCase):
-    def setUp(self):
-        H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()[:8]
-        self.PAD = PersistentAuthDict(SelectRedBlack(H))
-
-    def test_pad(self):
-        insert = self.PAD.insert
-        digest = self.PAD.digest
-        search = self.PAD.search
-        reconstruct = self.PAD.reconstruct
-
-        PAD = (), {}
-
-        values = range(20)
-        random.shuffle(values)
-
-        for v in values:
-            d0 = digest(PAD)
-            (N,_) = d0
-            S, VO = insert(v, PAD)
-            if N:
-                R = reconstruct(d0, VO)
-                assert digest(R) == digest(PAD)
-                assert search(v, PAD) == search(v, R)
-            PAD = S
-
-        for i, v in enumerate(values):
-            if i < 1: continue
-            # Each element should be in the most recent set, but
-            # not in the one before that
-            assert search(v, PAD, t=i)[0] == v
-            assert search(v, PAD, t=i-1)[0] != v
 
 
 
