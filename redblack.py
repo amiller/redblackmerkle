@@ -143,53 +143,38 @@ class RedBlack(object):
         return self.H((c, k, dL, dR))
 
 
-    def reconstruct(self, d0, VO):
-        dO = self.digest(())
-        table = dict(VO)
-        def _recons(d0):
-            if d0 == dO or d0 not in table: return ()
-            (c, (k, dL, dR)) = table[d0]
-            assert self.digest((c, (), (k, dL, dR), ())) == d0
-            return (c, _recons(dL), (k, dL, dR), _recons(dR))
-        return _recons(d0)
-
-
-    def _stash(self):
-        VO = []
-        def stash(dD, D):
-            (c, _, x, _) = D
-            VO.append((dD, (c, x)))
-            return D
-        return stash, VO
-
+    """
+    Search, Insert, Delete
+    """
     
-    def search(self, q, D):
+    def search(self, q, walk):
         """
         """
-        dO = self.digest(())
+        if isinstance(walk, tuple): walk = self.walk(walk)
+        D = walk.next()
         d0 = self.digest(D)
-        stash, VO = self._stash()
+        dO = self.digest(())
         while True:
-            stash(d0,D)
+            D = walk.send((d0, D))
             c, L, (k, dL, dR), R = D
-            if dL == dR == dO: return k, tuple(VO)
-            (d0,D) = (dL,L) if q <= k else (dR,R)
+            if dL == dR == dO: return k
+            (d0, D) = (dL, L) if q <= k else (dR, R)
 
 
-    def insert(self, q, D):
+    def insert(self, q, walk):
         """
         Insert element q into the tree.
         Exceptions:
             AssertionError if q is already in the tree.
         """
         balance = self.balance
+        if isinstance(walk, tuple): walk = self.walk(walk)
+        D = walk.next()
         dO = self.digest(())
         d0 = self.digest(D)
         x = (q, dO, dO)
         leaf = ('B', (), x, ())
-        if not D: return leaf, ()
-        stash, VO = self._stash()
-        stash(d0, D)
+        if not D: return leaf
 
         def ins(D):
             if not D: return leaf
@@ -201,18 +186,20 @@ class RedBlack(object):
             if q < k and dL == dO: return balance(('R', leaf, x, black(D)))
             if q > k and dR == dO: return balance(('R', black(D), y, leaf))
 
-            if q < k: return balance((c, ins(stash(dL,L)), y, R))
-            if q > k: return balance((c, L, y, ins(stash(dR,R))))
+            if q < k: return balance((c, ins(walk.send((dL,L))), y, R))
+            if q > k: return balance((c, L, y, ins(walk.send((dR,R)))))
 
         black = lambda (c,a,y,b): ('B',a,y,b)
-        return balance(black(ins(D))), tuple(VO)
+        return balance(black(ins(walk.send((d0,D)))))
 
 
-    def delete(self, q, D):
+    def delete(self, q, walk):
         balance = self.balance
+        if isinstance(walk, tuple): walk = self.walk(walk)
+        D = walk.next()
         dO = self.digest(())
         d0 = self.digest(D)
-        stash, VO = self._stash()
+
         def rehash(D):
             """
             Recompute the digests only when the subtrees are available. 
@@ -227,24 +214,28 @@ class RedBlack(object):
         def unbalancedL((c, L, x, R)):
             (k, dL, dR) = x
             (lc, lL, lx, lR) = L
-            stash(lx[1], lL)
-            stash(lx[2], lR)
+            lL = walk.send((lx[1], lL))
+            lR = walk.send((lx[2], lR))
+            L = (lc, lL, lx, lR)
             if lc == 'B':
                 return balance(('B', turnR(L), x, R)), c=='B'
-            stash(lR[2][1], lR[1])
-            stash(lR[2][2], lR[3])
+            lRL = walk.send((lR[2][1], lR[1]))
+            lRR = walk.send((lR[2][2], lR[3]))
+            lR = (lR[0], lRL, lR[2], lRR)
             assert c == 'B' and lc == 'R' and lR[0] == 'B'
             return rehash(('B', lL, lx, balance(('B', turnR(lR), x, R)))), False
 
         def unbalancedR((c, L, x, R)):
             (k, dL, dR) = x
             (rc, rL, rx, rR) = R
-            stash(rx[1], rL)
-            stash(rx[2], rR)
+            rL = walk.send((rx[1], rL))
+            rR = walk.send((rx[2], rR))
+            R = (rc, rL, rx, rR)
             if rc == 'B':
                 return balance(('B', L, x, turnR(R))), c=='B'
-            stash(rL[2][1], rL[1])
-            stash(rL[2][2], rL[3])
+            rLL = walk.send((rL[2][1], rL[1]))
+            rLR = walk.send((rL[2][2], rL[3]))
+            rL = (rL[0], rLL, rL[2], rLR)
             assert c == 'B' and rc == 'R' and rL[0] == 'B'
             return rehash(('B', balance(('B', L, x, turnR(rL))), rx, rR)), False
 
@@ -256,13 +247,13 @@ class RedBlack(object):
             Third, the maximum value in the tree in case deleting changes it
             """
             if d0 == dO: return (), False, None
-            c, L, (k, dL, dR), R = stash(d0, D)
+            c, L, (k, dL, dR), R = walk.send((d0, D))
             if dL == dR == dO:
                 assert q == k
                 return (), True, None
             if q <= k:
-                if dL != dO: assert L
-                stash(dR, R)
+                #if dL != dO: assert L
+                R = walk.send((dR, R))
                 L_, d, m = del_(dL, L)
                 if not L_: return R, c=='B', None
                 if q == k:
@@ -271,8 +262,8 @@ class RedBlack(object):
                 t = rehash((c, L_, (k, dO, dO), R))
                 return unbalancedR(t) + (None,) if d else (t, False, None)
             if q  > k:
-                if dR != dO: assert R
-                stash(dL, L)
+                #if dR != dO: assert R
+                L = walk.send((dL, L))
                 R_, d, m = del_(dR, R)
                 if not R_: return L, c=='B', k
                 t = rehash((c, L, (k, dO, dO), R_))
@@ -282,7 +273,7 @@ class RedBlack(object):
         turnB = lambda (_, L, x, R): ('B', L, x, R)
         turnB_ = lambda x: () if not x else turnB(x)
 
-        return rehash(turnB_(del_(d0, D)[0])), tuple(VO)
+        return rehash(turnB_(del_(d0, D)[0]))
 
 
     def balance(self, D):
@@ -326,6 +317,54 @@ class RedBlack(object):
                        match(B,a,(x,m,_),(R,b,(y,n,_),(R,c,(z,o,p),d))) or
                        D)
 
+
+    """
+    Methods for traversing the tree and collecting/replaying proofs
+    """
+
+    def reconstruct(self, d0, VO):
+        dO = self.digest(())
+        table = dict(VO)
+        assert len(table) == len(VO)
+        def _recons(d0):
+            if d0 == dO or d0 not in table: return ()
+            (c, (k, dL, dR)) = table[d0]
+            assert self.digest((c, (), (k, dL, dR), ())) == d0
+            return (c, _recons(dL), (k, dL, dR), _recons(dR))
+        return _recons(d0)
+
+
+    def walk(self, D):
+        while True: _, D = yield D
+
+
+    def record_walk(self, D):
+        VO = []
+        def walk(D):
+            while True:
+                d0, D = yield D
+                (c, _, x, _) = D
+                VO.append((d0,(c,x)))
+        return walk(D), VO
+
+
+    def replay_walk(self, d0, VO):
+        digest = self.digest
+        it = iter(VO)
+        def walk(d0):
+            yield None
+            try:
+                while True:
+                    _, (c,x) = it.next()
+                    D = (c, (), x, ())
+                    assert digest(D) == d0
+                    d0, _ = yield D
+
+            except StopIteration:
+                yield D
+        return walk(d0)
+
+
     def replay_proofs(self, d0, VOs):
         digest = self.digest
         reconstruct = self.reconstruct
@@ -333,7 +372,9 @@ class RedBlack(object):
         def proof(d0):
             try:
                 while True:
-                    D, _ = yield reconstruct(d0, it.next())
+                    VO = it.next()
+                    D, _VO = yield reconstruct(d0, VO)
+                    assert VO == _VO
                     d0 = digest(D)
             except StopIteration:
                 yield D
@@ -371,24 +412,28 @@ class SelectRedBlack(RedBlack):
         assert len(VO) <= 3*math.ceil(math.log(N+1,2))+4
         return super(SelectRedBlack,self).reconstruct(d0, VO)
 
-    def select(self, i, D):
+    def select(self, i, walk):
+        if isinstance(walk, tuple): walk = self.walk(walk)
+        D = walk.next()
+        d0 = self.digest(D)
         dO = self.digest(())
-        while D:
-            c, L, (k, dL, dR), R = D
+        while True:
+            c, L, (k, dL, dR), R = walk.send((d0, D))
             j = dL[0]
             if i == 0 and dL == dR == dO: return k
             (D,i) = (L,i) if i < j else (R,i-j)
-        raise ValueError
 
-    def rank(self, q, D):
+    def rank(self, q, walk):
+        if isinstance(walk, tuple): walk = self.walk(walk)
+        D = walk.next()
+        d0 = self.digest(D)
         dO = self.digest(())
         i = 0
-        while D:
-            c, L, (k, dL, dR), R = D
+        while True:
+            _, L, (k, dL, dR), R = walk.send((d0, D))
             j = dL[0]
             if q == k and dL == dR == dO: return i + j
-            (D,i) = (L,i) if q <= k else (R,i+j)
-        raise ValueError
+            (D,d0,i) = (L,dL,i) if q <= k else (R,dR,i+j)
 
     def size(self, D):
         (N, _) = self.digest(D)
