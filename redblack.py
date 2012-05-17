@@ -131,28 +131,24 @@ class RedBlack(object):
                   H((c, k, dL, dR))
         """
         self.H = H
+        self.dO = self.digest(())
 
 
     def digest(self, D):
-        """
-        The digest for each node is typically computed using the previously-
-        computed digests for its children, rather than recursively.
-        """
         if not D: return self.H(())
-        c, _, (k, dL, dR), _ = D
+        (c, _, (k, dL, dR), _) = D
         return self.H((c, k, dL, dR))
 
-
+        
     """
     Methods for traversing the tree and collecting/replaying proofs
     """
 
     def reconstruct(self, d0, VO):
-        dO = self.digest(())
         table = dict(VO)
         assert len(table) == len(VO)
         def _recons(d0):
-            if d0 == dO or d0 not in table: return ()
+            if d0 == self.dO or d0 not in table: return ()
             (c, (k, dL, dR)) = table[d0]
             assert self.digest((c, (), (k, dL, dR), ())) == d0
             return (c, _recons(dL), (k, dL, dR), _recons(dR))
@@ -163,13 +159,61 @@ class RedBlack(object):
         while True: _, D = yield D
 
 
+    def tree_to_dict(self, D):
+        d = {}
+        while D:
+            (c, _, (k, dL, dR), _) = D
+            d[self.digest(D)] = (c, k, dL, dR)
+        return d
+
+
+    def getter(self, D):
+        return self.record(D)[:2]
+
+    def record(self, D):
+        VO = []
+        cache = {}
+        prefetch = {digest(D): D}
+
+        def store(D): 
+            d0 = self.H(D)
+            cache[d0] = D
+            return d0
+
+        def get(d0):
+            if d0 in cache: return cache[d0]
+            D = prefetch[d0]
+            (c, L, (k, dL, dR), R) = D
+            D = (c, k, dL, dR)
+            prefetch[dL] = L
+            prefetch[dR] = R
+            cache[d0] = D
+            VO.append(D)
+            return D
+
+        return (get, store), VO
+
+
+    def replay(self, d0, VO):
+        H = self.H
+        it = iter(VO)
+        cache = {}
+        def get_and_verify(d0):
+            if d0 in cache: return cache
+            (_d0, D) = it.next()
+            assert _d0 == d0 == H(D)
+            cache[d0] = D
+            return D
+        return get_and_verify
+
+
     def record_walk(self, D):
         VO = []
         def walk(D):
             while True:
                 d0, D = yield D
-                (c, _, x, _) = D
-                VO.append((d0,(c,x)))
+                (c, _, (k, dL, dR), _) = D
+                VO.append((d0, (c, k, dL, dR)))
         return walk(D), VO
 
 
@@ -194,50 +238,42 @@ class RedBlack(object):
     Search, Insert, Delete
     """
     
-    def search(self, q, walk):
+    def search(self, q, d0, get):
         """
         """
-        if isinstance(walk, tuple): walk = self.walk(walk)
-        D = walk.next()
-        d0 = self.digest(D)
-        dO = self.digest(())
-        while True:
-            D = walk.send((d0, D))
-            c, L, (k, dL, dR), R = D
-            if dL == dR == dO: return k
-            (d0, D) = (dL, L) if q <= k else (dR, R)
+        if not callable(get): get = self.getter(get)
+        while True:            
+            c, k, dL, dR = get(d0)
+            if dL == dR == self.dO: return k
+            d0 = dL if q <= k else dR
 
 
-    def insert(self, q, walk):
-        """
+    def insert(self, q, (get, tree)):
+        """e
         Insert element q into the tree.
         Exceptions:
             AssertionError if q is already in the tree.
         """
         balance = self.balance
-        if isinstance(walk, tuple): walk = self.walk(walk)
-        D = walk.next()
-        dO = self.digest(())
-        d0 = self.digest(D)
-        x = (q, dO, dO)
-        leaf = ('B', (), x, ())
-        if not D: return leaf
+        dO = self.dO
+        H = self.H
+        leaf = store(('B', q, dO, dO))
+        if d0 == dO: return leaf
 
-        def ins(D):
-            if not D: return leaf
-            c, L, y, R = D
-            (k, dL, dR) = y
+        def ins(d0):
+            (c, k, dL, dR) = get(d0)
+            blackD = ('B', k, dL, dR)
 
             assert q != k, "Can't insert duplicate element"
 
-            if q < k and dL == dO: return balance(('R', leaf, x, black(D)))
-            if q > k and dR == dO: return balance(('R', black(D), y, leaf))
+            if q < k and dL == dO: return tree('R', q, leaf, store(blackD))
+            if q > k and dR == dO: return tree('R', q, store(blackD), leaf)
 
-            if q < k: return balance((c, ins(walk.send((dL,L))), y, R))
-            if q > k: return balance((c, L, y, ins(walk.send((dR,R)))))
-
-        black = lambda (c,a,y,b): ('B',a,y,b)
-        return balance(black(ins(walk.send((d0,D)))))
+            if q < k: return balance((c, ins(dL), y, dR))
+            if q > k: return balance((c, L, y, ins(dR)))
+        
+        blacken = lambda (_,k,dL,dR): ('B',k,dL,dR)
+        return H(blacken(get(ins(d0))))
 
 
     def delete(self, q, walk):
@@ -263,9 +299,8 @@ class RedBlack(object):
             (lc, lL, lx, lR) = L
             lL = walk.send((lx[1], lL))
             lR = walk.send((lx[2], lR))
-            L = (lc, lL, lx, lR)
             if lc == 'B':
-                return balance(('B', turnR(L), x, R)), c=='B'
+                return balance(('B', ('R', lL, lx, lR), x, R)), c=='B'
             lRL = walk.send((lR[2][1], lR[1]))
             lRR = walk.send((lR[2][2], lR[3]))
             lR = (lR[0], lRL, lR[2], lRR)
@@ -277,9 +312,8 @@ class RedBlack(object):
             (rc, rL, rx, rR) = R
             rL = walk.send((rx[1], rL))
             rR = walk.send((rx[2], rR))
-            R = (rc, rL, rx, rR)
             if rc == 'B':
-                return balance(('B', L, x, turnR(R))), c=='B'
+                return balance(('B', L, x, ('R', rL, rx, rR))), c=='B'
             rLL = walk.send((rL[2][1], rL[1]))
             rLR = walk.send((rL[2][2], rL[3]))
             rL = (rL[0], rLL, rL[2], rLR)
@@ -322,8 +356,18 @@ class RedBlack(object):
 
         return rehash(turnB_(del_(d0, D)[0]))
 
+    def balanceL(self, (c, k, dL, dR), L, R):
+        
+        if c == 'B':
+            return (
+        
+        if c = 
+        balanceL B (Fork R (Fork R a x b) y c) z d = Fork R (Fork B a x b) y (Fork B c z d)
+        balanceL B (Fork R a x (Fork R b y c)) z d = Fork R (Fork B a x b) y (Fork B c z d)
+        balanceL k a x b                           = Fork k a x b
 
-    def balance(self, D):
+
+    def balance(self, d0):
         if not D: return ()
         def rehash(D):
             # Recompute the hashes for each child, but only if the child is

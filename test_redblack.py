@@ -60,6 +60,15 @@ class RedBlackTest(unittest.TestCase):
     def setUp(self):
         self.RB = RedBlack()
 
+    def test_record_replay(self):
+        record = self.RB.record
+        replay = self.RB.replay
+        D = ()
+        values = range(50)
+        random.shuffle(values)
+        for v in values:
+            D = insert(v, D)
+
     def test_degenerate(self):
         digest = self.RB.digest
         search = self.RB.search
