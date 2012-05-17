@@ -144,6 +144,53 @@ class RedBlack(object):
 
 
     """
+    Methods for traversing the tree and collecting/replaying proofs
+    """
+
+    def reconstruct(self, d0, VO):
+        dO = self.digest(())
+        table = dict(VO)
+        assert len(table) == len(VO)
+        def _recons(d0):
+            if d0 == dO or d0 not in table: return ()
+            (c, (k, dL, dR)) = table[d0]
+            assert self.digest((c, (), (k, dL, dR), ())) == d0
+            return (c, _recons(dL), (k, dL, dR), _recons(dR))
+        return _recons(d0)
+
+
+    def walk(self, D):
+        while True: _, D = yield D
+
+
+    def record_walk(self, D):
+        VO = []
+        def walk(D):
+            while True:
+                d0, D = yield D
+                (c, _, x, _) = D
+                VO.append((d0,(c,x)))
+        return walk(D), VO
+
+
+    def replay_walk(self, d0, VO):
+        digest = self.digest
+        it = iter(VO)
+        def walk(d0):
+            yield None
+            try:
+                while True:
+                    _, (c,x) = it.next()
+                    D = (c, (), x, ())
+                    assert digest(D) == d0
+                    d0, _ = yield D
+
+            except StopIteration:
+                yield D
+        return walk(d0)
+
+
+    """
     Search, Insert, Delete
     """
     
@@ -316,54 +363,6 @@ class RedBlack(object):
                        match(B,a,(x,m,_),(R,(R,b,(y,n,o),c),(z,_,p),d)) or
                        match(B,a,(x,m,_),(R,b,(y,n,_),(R,c,(z,o,p),d))) or
                        D)
-
-
-    """
-    Methods for traversing the tree and collecting/replaying proofs
-    """
-
-    def reconstruct(self, d0, VO):
-        dO = self.digest(())
-        table = dict(VO)
-        assert len(table) == len(VO)
-        def _recons(d0):
-            if d0 == dO or d0 not in table: return ()
-            (c, (k, dL, dR)) = table[d0]
-            assert self.digest((c, (), (k, dL, dR), ())) == d0
-            return (c, _recons(dL), (k, dL, dR), _recons(dR))
-        return _recons(d0)
-
-
-    def walk(self, D):
-        while True: _, D = yield D
-
-
-    def record_walk(self, D):
-        VO = []
-        def walk(D):
-            while True:
-                d0, D = yield D
-                (c, _, x, _) = D
-                VO.append((d0,(c,x)))
-        return walk(D), VO
-
-
-    def replay_walk(self, d0, VO):
-        digest = self.digest
-        it = iter(VO)
-        def walk(d0):
-            yield None
-            try:
-                while True:
-                    _, (c,x) = it.next()
-                    D = (c, (), x, ())
-                    assert digest(D) == d0
-                    d0, _ = yield D
-
-            except StopIteration:
-                yield D
-        return walk(d0)
-
 
     def replay_proofs(self, d0, VOs):
         digest = self.digest

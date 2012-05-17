@@ -18,32 +18,14 @@ Tx:
 
     and the inputs are references to outputs from previous transactions:
 
-        for inp, sig in zip(Inputs):
-            (pub, amt), VO = query_unspent(inp, D)
+        for inp, sig in zip(inps, sigs):
+            (_, (pub, amt) = search(inp, D)
             assert verify_signature(pub, sig)
             assert amt > 0
 
     For a transaction to be valid, the signature must match the public keys
     for all the inputs and the amount of tokens going out must exactly match
     the value of the tokens coming in.
-
-
-It gets slightly more complicated. Since the _authoritative_ version of
-transaction commits is decided by the longest chain of blocks, it's also
-essential for miners to store (at least some sliding window of) the blockchain
-history.
-
-
-C:
-    A block chain
-        (
-
-B:
-    A Block consists of a sequence of transactions, along with the digest of
-    a previous block (forming a chain) and a winning solution to the
-    proof-of-work puzzle.
-
-        (dPrev, Txs, Nonce) = B
     
 """
 
