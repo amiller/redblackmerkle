@@ -116,6 +116,7 @@ R:
                 assert R_VO == D_VO
 """
 import math
+import itertools
 
 class RedBlack(object):
     def __init__(self, H=hash):
@@ -197,7 +198,6 @@ class Traversal(object):
         return store('B',balanceR('B',dL,k,store(*red(_L))),_k,_dR), False
 
     def match(self, (lhs, rhs), value):
-        dO = self.dO
         table = {}
         get = self.get
         store = self.store
@@ -206,7 +206,7 @@ class Traversal(object):
             if left in ('R','B'): return left == value
             if isinstance(left, tuple):
                 return value != dO and all((_match(*pair) for pair in
-                                            zip(left, get(value))))
+                                            itertools.izip(left, get(value))))
             table[left] = value
             return True
 
