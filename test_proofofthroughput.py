@@ -13,15 +13,13 @@ from proofofthroughput import RedBlackSelectThroughput
 from proofofthroughput import SortThroughput
 from proofofthroughput import HashThroughput
 
-reconstruct = RB.reconstruct
 insert = RB.insert
 digest = RB.digest
 search = RB.search
 delete = RB.delete
+record = RB.record
+replay = RB.replay
 size = RB.size
-walk = RB.walk
-record_walk = RB.record_walk
-replay_walk = RB.replay_walk
 
 class RedBlackSelectThroughputTest(unittest.TestCase):
     def setUp(self):
@@ -40,22 +38,21 @@ class RedBlackSelectThroughputTest(unittest.TestCase):
 
         # Construct the proof of work functions
         def F(d):
-            v = select(d, D)
-            w, VO = record_walk(D)
-            delete(v, w)
+            T = record(D)
+            v = T.select(d)
+            T.delete(v)
             data = table[v]
-            return (data, VO)
+            return (data, T.VO)
         self.F = F
 
         self.Sample = lambda seed: PRNG(seed).randint(0, N-1)
 
         def Verify(d, r):
             (data, VO) = r
-            R = reconstruct(d0, VO)
-            w, _VO = record_walk(R)
-            delete(select(d, R), w)
-            assert _VO == VO
-            assert H(data) == select(d, R)
+            T = replay(d0, VO)
+            v = T.select(d)
+            T.delete(v)
+            assert H(data) == v
             return True
         self.Verify = Verify
 

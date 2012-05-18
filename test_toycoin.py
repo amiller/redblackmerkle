@@ -1,5 +1,4 @@
 import redblack; reload(redblack)
-import persistent; reload(persistent)
 import notary; reload(notary)
 import toycoin; reload(toycoin)
 
@@ -59,12 +58,11 @@ class Client():
 directory = Directory(protocol)
 
 genesis = (('genesis',0), ('A', 100))
-walk = protocol.RB.walk
 
 def initial_tree():
-    E = protocol.RB.insert(genesis, walk(()))
+    E = protocol.RB.insert(genesis, ())
     dE = protocol.RB.digest(E)
-    D = protocol.WSRB.insert(((0,dE), 1), walk(()))
+    D = protocol.WSRB.insert(((0,dE), 1), ())
     d = {dE: E}
     A = (D,d)
     return A, dE

@@ -6,6 +6,8 @@ import redblack; reload(redblack)
 from redblack import RedBlack
 from redblack import SelectRedBlack
 from redblack import WeightSelectRedBlack
+from redblack import RecordTraversal, ReplayTraversal
+
 
 def invariants(RB, D):
     # The following invariants hold at all times for the red-black search tree
@@ -24,7 +26,7 @@ def invariants(RB, D):
     # No red node has a red parent
     def _redparent(D, parent_is_red=False):
         if not D: return
-        (c, L, (k, _, _), R) = D
+        (c, L, _, R) = D
         assert not (parent_is_red and c == 'R')
         _redparent(L, c == 'R')
         _redparent(R, c == 'R')
@@ -33,8 +35,11 @@ def invariants(RB, D):
     # from this root to a leaf are the same
     def _paths_black(D):
         if not D: return 0
-        (c, L, y, R) = D
+        (c, L, _, R) = D
         p = _paths_black(L)
+        if not p == _paths_black(R):
+            print _paths_black(R), _paths_black(L)
+            print D
         assert p == _paths_black(R)
         return p + (c == 'B')
 
@@ -53,56 +58,87 @@ def invariants(RB, D):
     _digests(D)
 
 
+def inorder_traversal(RB, D):
+    inorder = []
+    def _set(D):
+        if not D: return
+        (_, L, (k, dL, dR), R) = D
+        if dL == dR == RB.dO: inorder.append(k)
+        _set(L)
+        _set(R)
+    _set(D)
+    return inorder
+
+
 class RedBlackTest(unittest.TestCase):
-    """
-    The tree.insert, search, 
-    """
     def setUp(self):
         self.RB = RedBlack()
 
-    def test_record_replay(self):
-        record = self.RB.record
-        replay = self.RB.replay
+    def test_redblack(self):
+        insert = self.RB.insert
+        delete = self.RB.delete
+        search = self.RB.search
         D = ()
-        values = range(50)
-        random.shuffle(values)
+        values = range(32); random.shuffle(values)
         for v in values:
             D = insert(v, D)
+            invariants(self.RB, D)
+            assert v == search(v, D)
+
+        random.shuffle(values)
+        for v in values[1:]:
+            D = delete(v, D)
+            invariants(self.RB, D)
+            assert v != search(v, D)
+
+    def test_traversal_insert(self):
+        D = ()
+        RB = self.RB
+        H = RB.H
+        d0 = RB.digest(D)
+        values = range(32)
+        random.shuffle(values)
+        for v in values:
+            T = RecordTraversal(H, D)
+            d = T.insert(v)
+            D = T.reconstruct(d)
+            invariants(RB, D)
+            R = ReplayTraversal(H, d0, T.VO)
+            assert R.insert(v) == d
+            d0 = d
+            
+    def test_traversal_delete(self):
+        D = ()
+        RB = self.RB
+        H = RB.H
+        values = range(32)
+        random.shuffle(values)
+        for v in values:
+            T = RecordTraversal(H, D)
+            D = T.reconstruct(T.insert(v))
+
+        d0 = RB.digest(D)
+        random.shuffle(values)
+        for v in values:
+            T = RecordTraversal(H, D)
+            d = T.delete(v)
+            D = T.reconstruct(d)
+            invariants(RB, D)
+            R = ReplayTraversal(H, d0, T.VO)
+            assert R.delete(v) == d
+            d0 = d
 
     def test_degenerate(self):
         digest = self.RB.digest
         search = self.RB.search
         insert = self.RB.insert
-        walk = self.RB.walk
         dO = digest(())
         assert insert('a', ()) == ('B', (), ('a', dO, dO), ())
         self.assertRaises(ValueError, search, '', ())
         assert digest(()) == hash(())
 
-    def _test_reconstruct(self, D, n):
-        search = self.RB.search
-        reconstruct = self.RB.reconstruct
-        digest = self.RB.digest
-        walk = self.RB.walk
-        d0 = digest(D)
-        for q in range(n):
-            w, VO = record_walk(D)
-            k = search(q, w)
-
-            assert k == search(q, replay_walk(d0, VO))
-
-            R = reconstruct(d0, VO)
-            assert search(q, R) == search(q, D)
-
-            w, _VO = record_walk(R)
-            search(q, w)
-            assert VO == VO
-
-    def test_random(self, n=100):
+    def test_insert_random(self, n=100):
         insert = self.RB.insert
-        digest = self.RB.digest
-        search = self.RB.search
-        walk = self.RB.walk
         D = ()
         ref = set()
         for _ in range(n):
@@ -110,93 +146,24 @@ class RedBlackTest(unittest.TestCase):
             if not i in ref:
                 D = insert(i, D)
                 ref.add(i)
-            invariants(self.RB, D)
-            d0 = digest(D)
-            for i in range(n):
-                assert (search(i, D) == i) == (i in ref)
+            assert inorder_traversal(self.RB, D) == sorted(ref)
 
-    def test_delete_random(self, n=300):
-        reconstruct = self.RB.reconstruct
+    def test_delete_random(self, n=100):
         insert = self.RB.insert
-        search = self.RB.search
-        digest = self.RB.digest
         delete = self.RB.delete
-        record_walk = self.RB.record_walk
-        replay_walk = self.RB.replay_walk
-        walk = self.RB.walk
         for _ in range(n):
             D = ()
-            values = range(11)
+            values = range(15)
             random.shuffle(values)
             for i in values: D = insert(i, D)
+
+            ref = set(values)
             random.shuffle(values)
             for i in values:
-                w, VO = record_walk(D)
-                S = delete(i, w)
-                R = reconstruct(digest(D), VO)
-                w, _VO = record_walk(R)
-                SR  = delete(i, w)
-                assert _VO == VO
-                delete(i, replay_walk(digest(D), VO))
-                if S:
-                    assert search(i, S) != i
-                    assert digest(SR) == digest(S)
-                invariants(self.RB, S)
-                D = S
-
-    def test_insert_search(self):
-        reconstruct = self.RB.reconstruct
-        insert = self.RB.insert
-        search = self.RB.search
-        digest = self.RB.digest
-        record_walk = self.RB.record_walk
-        replay_walk = self.RB.replay_walk
-        walk = self.RB.walk
-        D = ()
-        for i in range(0, 8, 2): D = insert(i, D)
-        for i in (-1,1,3,5,7):
-            w, VO = record_walk(D)
-            search(i, w)
-            
-            R = reconstruct(digest(D), VO)
-            search(i, R)
-
-            w = replay_walk(digest(D), VO)
-            search(i, w)
-
-            w, _VO = record_walk(R)
-            search(i, w)
-            assert _VO == VO
-
-            invariants(self.RB, D)
-            S = insert(i, D)
-            SR = insert(i, R)
-            assert digest(S) == digest(SR)
-
-    def test_auth(self):
-        reconstruct = self.RB.reconstruct
-        insert = self.RB.insert
-        search = self.RB.search
-        digest = self.RB.digest
-        walk = self.RB.walk
-        record_walk = self.RB.record_walk
-        N = 100
-        D = ()
-        values = range(N)
-        random.shuffle(values)
-        for i in values[:-10]: D = insert(i, D)
-        for i in values[-10:]:
-            w, VO = record_walk(D)
-            S = insert(i, w)
-            R = reconstruct(digest(D), VO)
-            assert search(i, R) == search(i, D)
-
-            w, _VO = record_walk(R)
-            SR = insert(i, w)
-            assert _VO == VO
-            assert search(i, SR) == search(i, S)
-            assert digest(SR) == digest(S)
-
+                D = delete(i, D)
+                invariants(self.RB, D)
+                ref.remove(i)
+                assert inorder_traversal(self.RB, D) == sorted(ref)
 
 
 class SelectRedBlackTest(unittest.TestCase):
@@ -207,7 +174,6 @@ class SelectRedBlackTest(unittest.TestCase):
     def test_sequential(self):
         insert = self.RB.insert
         size = self.RB.size
-        walk = self.RB.walk
         D = ()
         for i in range(10):
             D = insert(i, D)
@@ -215,11 +181,9 @@ class SelectRedBlackTest(unittest.TestCase):
             invariants(self.RB, D)
 
     def test_select(self):
-        reconstruct = self.RB.reconstruct
         insert = self.RB.insert
-        record_walk = self.RB.record_walk
-        replay_walk = self.RB.replay_walk
-        walk = self.RB.walk
+        record = self.RB.record
+        replay = self.RB.replay
         search = self.RB.search
         digest = self.RB.digest
         select = self.RB.select
@@ -229,19 +193,16 @@ class SelectRedBlackTest(unittest.TestCase):
         values = range(N)
         random.shuffle(values)
         for v in values: D = insert(v, D)
-        d0 = digest(D)
 
         for _ in range(100):
             i = random.randint(0,N-1)
             v = select(i, D)
             assert i == rank(v, D)
 
-            record, VO = record_walk(D)
-            k = search(v, record)
-
-            R = reconstruct(d0, VO)
-            assert i == rank(v, R)
-            assert v == select(i, R)
+            T = record(D)
+            k = T.search(v)
+            assert replay(digest(D), T.VO).rank(v) == i
+            assert replay(digest(D), T.VO).select(i) == v
 
 
 class WeightSelectRedBlackTest(unittest.TestCase):
@@ -253,7 +214,6 @@ class WeightSelectRedBlackTest(unittest.TestCase):
         insert = self.RB.insert
         digest = self.RB.digest
         select_weight = self.RB.select_weight
-        walk = self.RB.walk
         within_eps = lambda a,b: abs(a-b) < 1e-5
         D = ()
         N = 100

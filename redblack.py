@@ -118,319 +118,246 @@ R:
 import math
 
 class RedBlack(object):
-    """
-
-    """
-
     def __init__(self, H=hash):
         """
         Args:
              H (optional): a collision-resistant hash function that
                            takes arguments of the form:             
                   H(())
-                  H((c, k, dL, dR))
+                  H((c, dL, k, dR))
         """
         self.H = H
         self.dO = self.digest(())
 
+    def record(self, D):
+        return RecordTraversal(self.H, D)
+
+    def replay(self, d0, VO):
+        return ReplayTraversal(self.H, d0, VO)
 
     def digest(self, D):
         if not D: return self.H(())
         (c, _, (k, dL, dR), _) = D
-        return self.H((c, k, dL, dR))
+        return self.H((c, dL, k, dR))
 
-        
-    """
-    Methods for traversing the tree and collecting/replaying proofs
-    """
+    def search(self, q, D):
+        T = self.record(D)
+        return T.search(q)
 
-    def reconstruct(self, d0, VO):
-        table = dict(VO)
-        assert len(table) == len(VO)
-        def _recons(d0):
-            if d0 == self.dO or d0 not in table: return ()
-            (c, (k, dL, dR)) = table[d0]
-            assert self.digest((c, (), (k, dL, dR), ())) == d0
-            return (c, _recons(dL), (k, dL, dR), _recons(dR))
-        return _recons(d0)
+    def insert(self, q, D):
+        T = self.record(D)
+        return T.reconstruct(T.insert(q))
+
+    def delete(self, q, D):
+        T = self.record(D)
+        return T.reconstruct(T.delete(q))
 
 
-    def walk(self, D):
-        while True: _, D = yield D
+class Traversal(object):
+    def __init__(self, H, d0):
+        self.H = H
+        self.cache = {}
+        self.dO = H(())
+        self.d0 = d0
 
+        R,B,a,b,c,d,x,y,z = 'RBabcdxyz'
+        self.bL1 = (B,(R,(R,a,x,b),y,c),z,d), (R,(B,a,x,b),y,(B,c,z,d))
+        self.bL2 = (B,(R,a,x,(R,b,y,c)),z,d), (R,(B,a,x,b),y,(B,c,z,d))
+        self.bR1 = (B,a,x,(R,(R,b,y,c),z,d)), (R,(B,a,x,b),y,(B,c,z,d))
+        self.bR2 = (B,a,x,(R,b,y,(R,c,z,d))), (R,(B,a,x,b),y,(B,c,z,d))
 
-    def tree_to_dict(self, D):
-        d = {}
-        while D:
-            (c, _, (k, dL, dR), _) = D
-            d[self.digest(D)] = (c, k, dL, dR)
-        return d
+    def balanceL(self, c, dL, k, dR):
+        d = self.store(c, dL, k, dR)
+        return self.match(self.bL1, d) or self.match(self.bL2, d) or d
 
+    def balanceR(self, c, dL, k, dR):
+        d = self.store(c, dL, k, dR)
+        return self.match(self.bR1, d) or self.match(self.bR2, d) or d
 
-    def getter(self, D):
-        return self.record(D)[:2]
+    def unbalancedL(self, c, dL, k, dR):
+        get = self.get
+        store = self.store
+        balanceL = self.balanceL
+        red = lambda (_,dL,x,dR): ('R',dL,x,dR)
+        (_c, _dL, _k, _dR) = get(dL)
+        if _c == 'B': return balanceL('B',store('R',_dL,_k,_dR),k,dR), c=='B'
+        _R = get(_dR)
+        assert c == 'B' and _c == 'R' and _R[0] == 'B'
+        return store('B',_dL,_k,balanceL('B',store(*red(_R)),k,dR)), False
 
-    def record(self, D):
-        VO = []
-        cache = {}
-        prefetch = {digest(D): D}
+    def unbalancedR(self, c, dL, k, dR):
+        get = self.get
+        store = self.store
+        balanceR = self.balanceR
+        red = lambda (_,dL,x,dR): ('R',dL,x,dR)
+        (_c, _dL, _k, _dR) = get(dR)
+        if _c == 'B': return balanceR('B',dL,k,store('R',_dL,_k,_dR)), c=='B'
+        _L = get(_dL)
+        assert c == 'B' and _c == 'R' and _L[0] == 'B'
+        return store('B',balanceR('B',dL,k,store(*red(_L))),_k,_dR), False
 
-        def store(D): 
-            d0 = self.H(D)
-            cache[d0] = D
-            return d0
+    def match(self, (lhs, rhs), value):
+        dO = self.dO
+        table = {}
+        get = self.get
+        store = self.store
 
-        def get(d0):
-            if d0 in cache: return cache[d0]
-            D = prefetch[d0]
-            (c, L, (k, dL, dR), R) = D
-            D = (c, k, dL, dR)
-            prefetch[dL] = L
-            prefetch[dR] = R
-            cache[d0] = D
-            VO.append(D)
-            return D
+        def _match(left, value):
+            if left in ('R','B'): return left == value
+            if isinstance(left, tuple):
+                return value != dO and all((_match(*pair) for pair in
+                                            zip(left, get(value))))
+            table[left] = value
+            return True
 
-        return (get, store), VO
+        def _constr(right, value):
+            if right in ('R','B'): return right
+            if isinstance(right, tuple):
+                return store(*(_constr(*pair) for pair in
+                               zip(right, get(value))))
+            return table[right]
 
+        return _constr(rhs, value) if _match(lhs, value) else None
 
-    def replay(self, d0, VO):
-        H = self.H
-        it = iter(VO)
-        cache = {}
-        def get_and_verify(d0):
-            if d0 in cache: return cache
-            (_d0, D) = it.next()
-            assert _d0 == d0 == H(D)
-            cache[d0] = D
-            return D
-        return get_and_verify
-
-
-    def record_walk(self, D):
-        VO = []
-        def walk(D):
-            while True:
-                d0, D = yield D
-                (c, _, (k, dL, dR), _) = D
-                VO.append((d0, (c, k, dL, dR)))
-        return walk(D), VO
-
-
-    def replay_walk(self, d0, VO):
-        digest = self.digest
-        it = iter(VO)
-        def walk(d0):
-            yield None
-            try:
-                while True:
-                    _, (c,x) = it.next()
-                    D = (c, (), x, ())
-                    assert digest(D) == d0
-                    d0, _ = yield D
-
-            except StopIteration:
-                yield D
-        return walk(d0)
+    def store(self, c, dL, k, dR):
+        C = (c, dL, k, dR)
+        d0 = self.H(C)
+        self.cache[d0] = C
+        return d0
+                                   
+    def get(self, d0):
+        return self.cache[d0]
 
 
     """
     Search, Insert, Delete
     """
     
-    def search(self, q, d0, get):
-        """
-        """
-        if not callable(get): get = self.getter(get)
+    def search(self, q):
+        d0 = self.d0
         while True:            
-            c, k, dL, dR = get(d0)
+            c, dL, k, dR = self.get(d0)
             if dL == dR == self.dO: return k
             d0 = dL if q <= k else dR
 
-
-    def insert(self, q, (get, tree)):
-        """e
+    def insert(self, q):
+        """
         Insert element q into the tree.
         Exceptions:
             AssertionError if q is already in the tree.
         """
-        balance = self.balance
+        balanceL = self.balanceL
+        balanceR = self.balanceR
+        store = self.store
+        get = self.get
         dO = self.dO
-        H = self.H
-        leaf = store(('B', q, dO, dO))
+        d0 = self.d0
+
+        leaf = store('B', dO, q, dO)
         if d0 == dO: return leaf
 
         def ins(d0):
-            (c, k, dL, dR) = get(d0)
-            blackD = ('B', k, dL, dR)
+            (c, dL, k, dR) = get(d0)
+            blackD = ('B', dL, k, dR)
 
             assert q != k, "Can't insert duplicate element"
 
-            if q < k and dL == dO: return tree('R', q, leaf, store(blackD))
-            if q > k and dR == dO: return tree('R', q, store(blackD), leaf)
+            if q < k and dL == dO: return store('R', leaf, q, store(*blackD))
+            if q > k and dR == dO: return store('R', store(*blackD), k, leaf)
 
-            if q < k: return balance((c, ins(dL), y, dR))
-            if q > k: return balance((c, L, y, ins(dR)))
+            if q < k: return balanceL(c, ins(dL), k, dR)
+            if q > k: return balanceR(c, dL, k, ins(dR))
         
-        blacken = lambda (_,k,dL,dR): ('B',k,dL,dR)
-        return H(blacken(get(ins(d0))))
+        blacken = lambda (_,dL,k,dR): ('B',dL,k,dR)
+        return store(*blacken(get(ins(d0))))
 
 
-    def delete(self, q, walk):
-        balance = self.balance
-        if isinstance(walk, tuple): walk = self.walk(walk)
-        D = walk.next()
-        dO = self.digest(())
-        d0 = self.digest(D)
+    def delete(self, q):
+        unbalancedL = self.unbalancedL
+        unbalancedR = self.unbalancedR
+        store = self.store
+        get = self.get
+        dO = self.dO
 
-        def rehash(D):
-            """
-            Recompute the digests only when the subtrees are available. 
-            Otherwise use the initial values.
-            """
-            if not D: return ()
-            c, L, (k, dL, dR), R = D
-            if L: dL = self.digest(L)
-            if R: dR = self.digest(R)
-            return (c, L, (k, dL, dR), R)
-
-        def unbalancedL((c, L, x, R)):
-            (k, dL, dR) = x
-            (lc, lL, lx, lR) = L
-            lL = walk.send((lx[1], lL))
-            lR = walk.send((lx[2], lR))
-            if lc == 'B':
-                return balance(('B', ('R', lL, lx, lR), x, R)), c=='B'
-            lRL = walk.send((lR[2][1], lR[1]))
-            lRR = walk.send((lR[2][2], lR[3]))
-            lR = (lR[0], lRL, lR[2], lRR)
-            assert c == 'B' and lc == 'R' and lR[0] == 'B'
-            return rehash(('B', lL, lx, balance(('B', turnR(lR), x, R)))), False
-
-        def unbalancedR((c, L, x, R)):
-            (k, dL, dR) = x
-            (rc, rL, rx, rR) = R
-            rL = walk.send((rx[1], rL))
-            rR = walk.send((rx[2], rR))
-            if rc == 'B':
-                return balance(('B', L, x, ('R', rL, rx, rR))), c=='B'
-            rLL = walk.send((rL[2][1], rL[1]))
-            rLR = walk.send((rL[2][2], rL[3]))
-            rL = (rL[0], rLL, rL[2], rLR)
-            assert c == 'B' and rc == 'R' and rL[0] == 'B'
-            return rehash(('B', balance(('B', L, x, turnR(rL))), rx, rR)), False
-
-        def del_(d0, D):
+        def _del(d0):
             """
             This function recursively 'bubbles' up three values
-            First, the result of each subtree after deleting the element
-            Second, a flag indicating whether we're short by one black path
-            Third, the maximum value in the tree in case deleting changes it
+            First, the digest of the subtree after deleting the element
+            Second, a flag indicating whether we're unbalanced by one
+            Third, the maximum value in the subtree, in case the previous 
+                   maximum was the deleted element
             """
             if d0 == dO: return (), False, None
-            c, L, (k, dL, dR), R = walk.send((d0, D))
+            c, dL, k, dR = get(d0)
             if dL == dR == dO:
                 assert q == k
-                return (), True, None
+                return dO, True, None
             if q <= k:
-                #if dL != dO: assert L
-                R = walk.send((dR, R))
-                L_, d, m = del_(dL, L)
-                if not L_: return R, c=='B', None
+                _dL, d, m = _del(dL)
+                if _dL == dO: return dR, c=='B', None
                 if q == k:
                     assert m is not None
                     k = m
-                t = rehash((c, L_, (k, dO, dO), R))
-                return unbalancedR(t) + (None,) if d else (t, False, None)
+                t = (c, _dL, k, dR)
+                if d: return unbalancedR(*t) + (None,)
+                else: return store(*t), False, None
             if q  > k:
-                #if dR != dO: assert R
-                L = walk.send((dL, L))
-                R_, d, m = del_(dR, R)
-                if not R_: return L, c=='B', k
-                t = rehash((c, L, (k, dO, dO), R_))
-                return unbalancedL(t) + (m,) if d else (t, False, m)
+                _dR, d, m = _del(dR)
+                if _dR == dO: return dL, c=='B', k
+                t = (c, dL, k, _dR)
+                if d: return unbalancedL(*t) + (m,)
+                else: return store(*t), False, m
 
-        turnR = lambda (_, L, x, R): ('R', L, x, R)
-        turnB = lambda (_, L, x, R): ('B', L, x, R)
-        turnB_ = lambda x: () if not x else turnB(x)
-
-        return rehash(turnB_(del_(d0, D)[0]))
-
-    def balanceL(self, (c, k, dL, dR), L, R):
-        
-        if c == 'B':
-            return (
-        
-        if c = 
-        balanceL B (Fork R (Fork R a x b) y c) z d = Fork R (Fork B a x b) y (Fork B c z d)
-        balanceL B (Fork R a x (Fork R b y c)) z d = Fork R (Fork B a x b) y (Fork B c z d)
-        balanceL k a x b                           = Fork k a x b
+        blacken = lambda (_,dL,x,dR): ('B',dL,x,dR)
+        d, _, _ = _del(self.d0)
+        return dO if d == dO else store(*blacken(get(d)))
 
 
-    def balance(self, d0):
-        if not D: return ()
-        def rehash(D):
-            # Recompute the hashes for each child, but only if the child is
-            # is available. Otherwise, we leave the current value unchanged.
-            c, L, (k, dL, dR), R = D
-            if L: dL = self.digest(L)
-            if R: dR = self.digest(R)
-            return (c, L, (k, dL, dR), R)
+class RecordTraversal(Traversal):
+    def __init__(self, H, D):
+        c = lambda (c, _, (k, dL, dR), __): (c, dL, k, dR)
+        d0 = H(c(D) if D else ())
+        super(RecordTraversal,self).__init__(H, d0)
+        self.d = {d0: D}
+        self.VO = []
 
-        R,B,a,b,c,d,x,y,z,m,n,o,p,_ = 'RBabcdxyzmnop_'
-        dO = self.digest(())
+    def get(self, d0):
+        try:
+            return super(RecordTraversal,self).get(d0)
+        except KeyError:
+            D = self.d[d0]
+            (c, L, (k, dL, dR), R) = D
+            C = (c, dL, k, dR)
+            self.d[dL] = L
+            self.d[dR] = R
+            self.cache[d0] = C
+            self.VO.append(C)
+            return C
 
-        # This is the simplest way I could think of simulating the 
-        # pattern matching from Haskell. The point is to be able to
-        # use the very elegant statement from the Okasaki paper [1]
-        # (see the return statement in this function)
-        # TODO: find a more elegant way to write this
-        #       benchmarking confirms this is the slowest part
-        def match(*args):
-            table = {}
-            def _match(left,right):
-                if left in ('R','B'): return left == right
-                if isinstance(left, tuple):
-                    return len(right) == len(left) and \
-                        all((_match(*pair) for pair in zip(left, right)))
-                assert left in 'abcdxyzmnop_'
-                table[left] = right
-                return True
+    def reconstruct(self, d0):
+        def _recons(d0):
+            if d0 == self.dO: return ()
+            if d0 in self.d: return self.d[d0]
+            if d0 in self.cache:
+                (c, dL, k, dR) = self.cache[d0]
+                return (c, _recons(dL), (k, dL, dR), _recons(dR))
+        return _recons(d0)
 
-            if _match(args, rehash(D)):
-                a,b,c,d,x,y,z,m,n,o,p = map(table.get, 'abcdxyzmnop')
-                return (R,(B,a,(x,m,n),b),(y,dO,dO),(B,c,(z,o,p),d))
-            else: return None
 
-        return rehash(match(B,(R,(R,a,(x,m,n),b),(y,_,o),c),(z,_,p),d) or
-                       match(B,(R,a,(x,m,_),(R,b,(y,n,o),c)),(z,_,p),d) or
-                       match(B,a,(x,m,_),(R,(R,b,(y,n,o),c),(z,_,p),d)) or
-                       match(B,a,(x,m,_),(R,b,(y,n,_),(R,c,(z,o,p),d))) or
-                       D)
+class ReplayTraversal(Traversal):
+    def __init__(self, H, d0, VO):
+        super(ReplayTraversal,self).__init__(H, d0)
+        self.VO = iter(VO)
 
-    def replay_proofs(self, d0, VOs):
-        digest = self.digest
-        reconstruct = self.reconstruct
-        it = iter(VOs)
-        def proof(d0):
-            try:
-                while True:
-                    VO = it.next()
-                    D, _VO = yield reconstruct(d0, VO)
-                    assert VO == _VO
-                    d0 = digest(D)
-            except StopIteration:
-                yield D
-        return proof(d0)
-
-    def record_proofs(self, D):
-        VOs = []
-        def proof(D):
-            while True:
-                D, VO = yield D
-                VOs.append(VO)
-        return proof(D), VOs
-
+    def get(self, d0):
+        try:
+            return super(ReplayTraversal,self).get(d0)
+        except KeyError:
+            C = self.VO.next()
+            assert self.H(C) == d0
+            self.cache[d0] = C
+            return C
+            
 
 """
 Further augmentations of the digest that provide extra functionality
@@ -442,45 +369,50 @@ class SelectRedBlack(RedBlack):
     selection by rank/index.
     """
     def __init__(self, H=hash):
-        def _H(d):
-            if not d: return (0, H(()))
-            (c, k, dL, dR) = d
-            return (dL[0] + dR[0] or 1, H(d))
+        def _H(C):
+            if not C: return (0, H(C))
+            (c, dL, k, dR) = C
+            return (dL[0] + dR[0] or 1, H(C))
         super(SelectRedBlack,self).__init__(_H)
 
-    def reconstruct(self, d0, VO):
-        # The worst case scenario for a VO depends on the size of the tree
-        # TODO: Work out this expression with a compelling diagram
+        def select(self, i):
+            d0 = self.d0
+            dO = self.dO
+            while True:
+                _, dL, k, dR = self.get(d0)
+                j = dL[0]
+                if i == 0 and dL == dR == dO: return k
+                (d0,i) = (dL,i) if i < j else (dR,i-j)
+            raise ValueError
+
+        def rank(self, q):
+            d0 = self.d0
+            dO = self.dO
+            i = 0
+            while True:
+                _, dL, k, dR = self.get(d0)
+                j = dL[0]
+                if q == k and dL == dR == dO: return i + j
+                (d0,i) = (dL,i) if q <= k else (dR,i+j)
+            raise ValueError
+
+        def patch(T):
+            T.select = lambda i: select(T, i)
+            T.rank = lambda i: rank(T, i)
+            return T
+        self._patch_select = patch
+
+    def record(self, D): 
+        return self._patch_select(super(SelectRedBlack,self).record(D))
+
+    def replay(self, d0, VO):
         (N, _) = d0
         assert len(VO) <= 3*math.ceil(math.log(N+1,2))+4
-        return super(SelectRedBlack,self).reconstruct(d0, VO)
+        return self._patch_select(super(SelectRedBlack,self).replay(d0, VO))
 
-    def select(self, i, walk):
-        if isinstance(walk, tuple): walk = self.walk(walk)
-        D = walk.next()
-        d0 = self.digest(D)
-        dO = self.digest(())
-        while True:
-            c, L, (k, dL, dR), R = walk.send((d0, D))
-            j = dL[0]
-            if i == 0 and dL == dR == dO: return k
-            (D,i) = (L,i) if i < j else (R,i-j)
-
-    def rank(self, q, walk):
-        if isinstance(walk, tuple): walk = self.walk(walk)
-        D = walk.next()
-        d0 = self.digest(D)
-        dO = self.digest(())
-        i = 0
-        while True:
-            _, L, (k, dL, dR), R = walk.send((d0, D))
-            j = dL[0]
-            if q == k and dL == dR == dO: return i + j
-            (D,d0,i) = (L,dL,i) if q <= k else (R,dR,i+j)
-
-    def size(self, D):
-        (N, _) = self.digest(D)
-        return N
+    def select(self, i, D): return self.record(D).select(i)
+    def rank(self, q, D): return self.record(D).rank(q)
+    def size(self, D): return self.digest(D)[0]
 
 
 class WeightSelectRedBlack(SelectRedBlack):
@@ -489,21 +421,37 @@ class WeightSelectRedBlack(SelectRedBlack):
     where the weight is taken from the node key.
     """
     def __init__(self, H=hash):
+        super(WeightSelectRedBlack,self).__init__(H)
+
         dO = H(())
         def _H(d):
             if not d: return (0, (0, H(())))
-            (c, k, dL, dR) = d
+            (c, dL, k, dR) = d
             W = (k[1] if dL[1][1] == dO and dR[1][1] == dO else 
                  dL[1][0] + dR[1][0])
             return dL[0] + dR[0] or 1, (W, H(d))
-        super(SelectRedBlack,self).__init__(_H)
+        self.H = _H
 
+        def select_weight(self, i):
+            d0 = self.d0
+            dO = self.dO
+            while True:
+                c, dL, k, dR = self.get(d0)
+                if dL == dR == dO: return k, i
+                j = dL[1][0]
+                (d0,i) = (dL,i) if i < j else (dR,i-j)
+            raise ValueError
 
-    def select_weight(self, i, D):
-        dO = self.digest(())
-        while D:
-            c, L, (k, dL, dR), R = D
-            j = dL[1][0]
-            if dL == dR == dO: return k, i
-            (D,i) = (L,i) if i < j else (R,i-j)
-        raise ValueError
+        def patch(T): 
+            T.select_weight = lambda w: select_weight(T, w)
+            return T
+        self._patch_weight = patch
+
+    def record(self, D):
+        return self._patch_weight(super(WeightSelectRedBlack,self).record(D))
+
+    def replay(self, d0, VO):
+        return self._patch_weight(super(WeightSelectRedBlack,self)
+                                  .replay(d0, VO))
+
+    def select_weight(self, w, D): return self.record(D).select_weight(w)
