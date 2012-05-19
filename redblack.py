@@ -160,6 +160,10 @@ class Traversal(object):
         self.dO = H(())
         self.d0 = d0
 
+        # TODO: each of the balance operations sometimes produces more 
+        # 'proof' than is necessary. For example, if bL2 is a match,
+        # then a 'negative proof' for bL1 is unnecessary. Is there a way
+        # to resolve this using the same coroutine setup I have?
         R,B,a,b,c,d,x,y,z = 'RBabcdxyz'
         self.bL1 = (B,(R,(R,a,x,b),y,c),z,d), (R,(B,a,x,b),y,(B,c,z,d))
         self.bL2 = (B,(R,a,x,(R,b,y,c)),z,d), (R,(B,a,x,b),y,(B,c,z,d))
