@@ -52,9 +52,6 @@ class Transaction():
 
 
     def apply_transaction(self, d0, Tx, proof):
-        search = self.RB.search
-        delete = self.RB.delete
-        insert = self.RB.insert
 
         (inps, outs, sigs) = Tx
         dTx = self.digest_transaction(Tx)
