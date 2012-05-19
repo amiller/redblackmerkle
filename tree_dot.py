@@ -23,6 +23,7 @@ node [fontname="Arial"];
 %s
 }
     """
+    dO = digest(())
 
     def edges(D, level=0):
         if not D: return
@@ -33,8 +34,12 @@ node [fontname="Arial"];
         node = 'N%d_%s' % (level, h(k))
         color, shape = (('red','ellipse') if c == 'R' else 
                         ('black', 'ellipse'))
-        yield '%s [label="(%d) %s || %s || %s", color=%s, shape=%s]\n' % \
-            (node, digest(D)[0], dL[1], k, dR[1], color, shape)
+        if dL == dR == dO:
+            yield '%s [label="(%d) %s: %s", color=%s, shape=%s]\n' % \
+                (node, digest(D)[0], k[0], k[1], color, shape)
+        else:
+            yield '%s [label="(%d) %s || %s || %s", color=%s, shape=%s]\n' % \
+                (node, digest(D)[0], dL[1], k[0], dR[1], color, shape)
 
         for dX,X,label in ((dL,L,'L'),(dR,R,'R')):
             if X: yield '%s -> N%d_%s;\n' % (node, level+1, h(X[2][0]))
@@ -72,22 +77,24 @@ def reconstruct(d0, VO):
         return (c, _recons(dL), (k, dL, dR), _recons(dR))
     return _recons(d0)
 
+aplus = lambda x: chr(ord('a')+x)
+
 D = ()
 for i in (5,3,7,9,11):
-    D = insert(i, D)
+    D = insert(i, D, aplus(i))
     tree2png('dots/test_reconstruct_i%d.png'%i, D)
 
 d0 = digest(D)
 tree2png('dots/test_reconstruct_0.png', D)
 T = record(D); T.insert(10); R = reconstruct(d0, T.VO)
 tree2png('dots/test_reconstruct_r0.png', R)
-tree2png('dots/test_reconstruct_1.png', insert(10, D))
-tree2png('dots/test_reconstruct_r1.png', insert(10, R))
+tree2png('dots/test_reconstruct_1.png', insert(10, D, aplus(10)))
+tree2png('dots/test_reconstruct_r1.png', insert(10, R, aplus(10)))
 
 D = ()
 values = range(31)
 #random.shuffle(values)
-for v in values: D = insert(v, D)
+for v in values: D = insert(v, D, aplus(v))
 tree2png('dots/sequential.png', D)
 D = insert(len(values)+0, D)
 tree2png('dots/sequential_31.png', D)
@@ -96,7 +103,7 @@ tree2png('dots/sequential_31.png', D)
 D = ()
 values = range(16)
 for i in values:
-    D = insert(i, D)
+    D = insert(i, D, aplus(i))
 d0 = digest(D)
 T = record(D); T.delete(10); R = reconstruct(d0, T.VO)
 tree2png('dots/test_delete_0.png', D)
