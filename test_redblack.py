@@ -16,12 +16,16 @@ def invariants(RB, D):
     # value in its left subtree.
     def _greatest(D):
         if not D: return
-        (c, L, (k, _, _), R) = D
+        (c, L, ((k,v), _, _), R) = D
         assert bool(L) == bool(R)
         if L and R:
+            assert v == ()
             assert _greatest(L) == k
             return _greatest(R)
-        else: return k
+        else:
+            if v == (): print D
+            assert v != ()
+            return k
 
     # No red node has a red parent
     def _redparent(D, parent_is_red=False):
@@ -83,13 +87,13 @@ class RedBlackTest(unittest.TestCase):
         for v in values:
             D = insert(v, D)
             invariants(self.RB, D)
-            assert v == search(v, D)
+            assert v == search(v, D)[0]
 
         random.shuffle(values)
         for v in values[1:]:
             D = delete(v, D)
             invariants(self.RB, D)
-            assert v != search(v, D)
+            assert v != search(v, D)[0]
 
     def test_traversal_insert(self):
         D = ()
@@ -133,7 +137,7 @@ class RedBlackTest(unittest.TestCase):
         search = self.RB.search
         insert = self.RB.insert
         dO = digest(())
-        assert insert('a', ()) == ('B', (), ('a', dO, dO), ())
+        assert insert('a', ()) == ('B', (), (('a',''), dO, dO), ())
         self.assertRaises(ValueError, search, '', ())
         assert digest(()) == hash(())
 
@@ -143,9 +147,9 @@ class RedBlackTest(unittest.TestCase):
         ref = set()
         for _ in range(n):
             i = random.randint(0,n)
-            if not i in ref:
-                D = insert(i, D)
-                ref.add(i)
+            if not (i,chr(i)) in ref:
+                D = insert(i, D, v=chr(i))
+                ref.add((i,chr(i)))
             assert inorder_traversal(self.RB, D) == sorted(ref)
 
     def test_delete_random(self, n=100):
@@ -155,14 +159,14 @@ class RedBlackTest(unittest.TestCase):
             D = ()
             values = range(15)
             random.shuffle(values)
-            for i in values: D = insert(i, D)
+            for i in values: D = insert(i, D, v=chr(i))
 
-            ref = set(values)
+            ref = set((v,chr(v)) for v in values)
             random.shuffle(values)
             for i in values:
                 D = delete(i, D)
                 invariants(self.RB, D)
-                ref.remove(i)
+                ref.remove((i,chr(i)))
                 assert inorder_traversal(self.RB, D) == sorted(ref)
 
 
@@ -223,13 +227,13 @@ class WeightSelectRedBlackTest(unittest.TestCase):
         total = 0.
         for i,w in enumerate(weights):
             total += w
-            D = insert((i,w), D)
+            D = insert(i, D, v=(w,))
             (_, (W, _)) = digest(D)
             assert within_eps(W, total)
 
         cumpdf = [sum(weights[:i]) for i in range(N)]
         for r in [random.random() for _ in range(20)]:
-            (i,w), residue = select_weight(r, D)
+            i, residue = select_weight(r, D)
             assert cumpdf[i] <= r
             assert within_eps(cumpdf[i] + residue, r)
             assert i == N-1 or cumpdf[i+1] > r

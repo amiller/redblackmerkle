@@ -2,21 +2,18 @@
 Andrew Miller <amiller@cs.ucf.edu>
 May 2012
 
-This RedBlack tree is an Authenticated Dictionary [1], based on a balanced 
-binary search tree. The tree is balanced strictly, so that all usual
+This RedBlack tree is an Authenticated Set [1], based on a balanced
+binary search tree. The tree is strictly balanced, so that all usual
 operations can be performed in O(log N) worst-case time. The tree is augmented
-with secure hashes for each node (forming a Merkle tree), which allows the
-correctness of each operation to be verified in O(log N) time. Only O(1) of
-'trusted' state (the Merkle tree root hash) must be maintained by a verifier.
+with secure hashes for each node, forming a Merkle tree. This allows each 
+operation to be 'replayed' by a Verifier using only O(log N) data. Only O(1) of
+'trusted' state (the Merkle tree root hash) must be maintained by the Verifier.
 
-Additionally, the dictionary supports selection of an element by its rank,
-which is useful for choosing set elements at random for a Proof-of-Throughput.
+Additionally, this tree supports selection of an element by its rank, which is
+especially useful in choosing elements at random for a Proof-of-Throughput.
 
-Using a balanced tree as an Authenticated Data Structure requires committing
-to a particular balancing behavior, since Verification occurs by simulating
-the computation on a pruned tree. This implementation uses a combination of
-Okasaki style balancing for insert [2] and a more verbose version of 
-delete [3,4].
+This implementation uses a combination of Okasaki style balancing for 
+insert [2] and Kazu Yamamato's version of delete [3,4,5].
 
 
 [1] Persistent Authenticated Dictionaries and Their Applications
@@ -35,86 +32,88 @@ delete [3,4].
     Andrew Appel
     http://www.cs.princeton.edu/~appel/papers/redblack.pdf
 
+[5] Purely Functional Left-Leaning Red-Black Trees
+    Kazu Yamamoto
+    http://www.mew.org/~kazu/proj/red-black-tree/
 
 
 Type definitions and common notations:
 ======================================
 
 RedBlack():
-    A RedBlack tree that can be augmented with an arbitrary  'digest' field 
-    which is recomputed for consistency at each node. The digests are
-    maintained correctly even when elements are inserted and deleted.
+    A RedBlack tree that can be augmented with a 'digest' field, which is
+    assumed to contain at least a collision-resistant hash function. The
+    digests for the subtrees are stored along with each node. The digests
+    are recomputed as necessary during insert and delete in order to maintain
+    consistency.
 
-    This tree includes a 'size' field which is used to implement the select() 
-    and rank() functions.
-
- ** Note that RedBlack objects simply define functions, the actual data structure 
-    D is just a tuple, as described below
+ ** Note that RedBlack objects simply define functions, the actual data 
+    structure D is just a tuple, as described below
 
 D:
     A Node in the tree, especially the root. Of the form:
         (Color, Left, (Element, LeftDigest, RightDigest), Right) = D
 
-    - This is typically abbreviated   (c, L, (k, dL, dR), R) = D
-    - Details about the components:
-        Color in ('R', 'B'): red and black labels for nodes
+    - Typically abbreviated
+        (c, L, (k, dL, dR), R) = D
 
-        Left, Right: the children, also Nodes,
-
-        LeftDigest, RightDigest:
-             digests of the children
-
-        Element: the node values are assumed to be fully ordered
+    - c in ('R', 'B'): red and black labels for balancing
+        L, R: the children, also Nodes,
+        dL, dR: digests of the children
+        k: each non-leaf's value is equal to the largest leaf value in the left
+           sub-tree
 
     - () represents the empty tree.
-      dO == digest(()) is the empty-digest
+    - dO == digest(()) is the empty-digest
+
+    - The following operations are defined as you'd expect:
+
+        D = insert(q, D)   # unless q is already in the set
+        D = delete(q, D)   # unless the set does not contain q
+        v = search(q, D)   # Returns the smallest element >= q, unless q is the
+                           # largest element in the tree
 
 VO:
-    Each of the following operations produces a Verification Object (VO) along 
-    with the result:
+    Each of the tree operations is defined in terms of a stateful 'Traversal'
+    object, which runs in one of two modes:
 
-        k, VO = search(q, D)
-        D, VO = insert(q, D)
-        D, VO = delete(q, D)
+    Record: 
+        The data for every node visited during subsequent operations on T
+        is appended to a Verification Object (VO).
 
-    The VO contains all of the data for the O(log N) nodes we visited during 
-    the computation.
+        T = record(D)
+        d0 = T.insert(q)
+        VO = T.VO
 
-        for (d0, (c, (k, dL, dR))) in VO:
-            assert d0 == digest((c, (), (k, dL, dR), ()))
+    Replay: 
+        A VO created from a recording can be replayed, simulating the
+        operation on the full tree.
 
-R:
-    The Verification Object can be used to assemble a partial 'reconstructed' 
-    tree
+        T = replay(d0, VO)
+        d0 = T.insert(q)
 
-         R = reconstruct(d0, VO)
+ ** Security Claim **
 
-    All of the tree operations can be performed on a reconstruction, just as
-    though it were an original tree. Operations on a reconstructed tree are
-    guaranteed to produce the same results as with the original (or else raise
-    an exception).
+    If an operation on a Replay traversal returns a value, then it is the same
+    value that would be returned by the operation on the original tree.
 
-    These invariants are the basis for a) acorrectness and b) a security claim 
-    about this implementation:
+    Proof sketch:
+       At each step during a traversal, the digest for each node is known
+       before the node's data is accessed. During a Replay, the digest is
+       is recomputed and verified.
 
-         for all D, VO:
-             R = reconstruct(d0, VO)
+ ** Bounded Cost-of-Verification Claim **
 
-             if search(q, R) succeeds, then
-                assert search(q, R) == search(q, D)
+    The tree is balanced such that the longest possible path from the root to
+    a leaf is 2 log N. The worst-case bounds for all operations are given
+    below:
+          delete: 4 + 3 log N
+          insert: 2 log N
+          search: 2 log N
 
-             if insert(q, R) succeeds, then
-                (R_new, R_VO) = insert(q, R)
-                (D_new, D_VO) = insert(q, D)
-                assert digest(R_new) == digest(D_new)
-                assert R_VO == D_VO
-
-             if delete(q, R) succeeds, then
-                (R_new, R_VO) = delete(q, R)
-                (D_new, D_VO) = insert(q, D)
-                assert digest(R_new) == digest(D_new)
-                assert R_VO == D_VO
+    TODO: I think these are wrong! How to construct the worst case?
 """
+
 import math
 import itertools
 
@@ -123,12 +122,17 @@ class RedBlack(object):
         """
         Args:
              H (optional): a collision-resistant hash function that
-                           takes arguments of the form:             
+                           takes arguments of the form:
                   H(())
                   H((c, dL, k, dR))
         """
         self.H = H
         self.dO = self.digest(())
+
+    def digest(self, D):
+        if not D: return self.H(())
+        (c, _, (k, dL, dR), _) = D
+        return self.H((c, dL, k, dR))
 
     def record(self, D):
         return RecordTraversal(self.H, D)
@@ -136,18 +140,13 @@ class RedBlack(object):
     def replay(self, d0, VO):
         return ReplayTraversal(self.H, d0, VO)
 
-    def digest(self, D):
-        if not D: return self.H(())
-        (c, _, (k, dL, dR), _) = D
-        return self.H((c, dL, k, dR))
-
     def search(self, q, D):
         T = self.record(D)
         return T.search(q)
 
-    def insert(self, q, D):
+    def insert(self, q, D, v=''):
         T = self.record(D)
-        return T.reconstruct(T.insert(q))
+        return T.reconstruct(T.insert(q, v))
 
     def delete(self, q, D):
         T = self.record(D)
@@ -198,9 +197,12 @@ class Traversal(object):
         return store('B',balanceR('B',dL,k,store(*red(_L))),_k,_dR), False
 
     def match(self, (lhs, rhs), value):
+        # Simulates Haskell pattern matching so we can copy the Okasaki
+        # balancing rules directly
         table = {}
         get = self.get
         store = self.store
+        dO = self.dO
 
         def _match(left, value):
             if left in ('R','B'): return left == value
@@ -238,14 +240,9 @@ class Traversal(object):
         while True:            
             c, dL, k, dR = self.get(d0)
             if dL == dR == self.dO: return k
-            d0 = dL if q <= k else dR
+            d0 = dL if q <= k[0] else dR
 
-    def insert(self, q):
-        """
-        Insert element q into the tree.
-        Exceptions:
-            AssertionError if q is already in the tree.
-        """
+    def insert(self, q, v=''):
         balanceL = self.balanceL
         balanceR = self.balanceR
         store = self.store
@@ -253,20 +250,21 @@ class Traversal(object):
         dO = self.dO
         d0 = self.d0
 
-        leaf = store('B', dO, q, dO)
+        leaf = store('B', dO, (q,v), dO)
         if d0 == dO: return leaf
 
         def ins(d0):
             (c, dL, k, dR) = get(d0)
-            blackD = ('B', dL, k, dR)
+            bD = ('B', dL, k, dR)
+            kk, _ = k
 
-            assert q != k, "Can't insert duplicate element"
+            assert q != kk, "Can't insert duplicate element"
 
-            if q < k and dL == dO: return store('R', leaf, q, store(*blackD))
-            if q > k and dR == dO: return store('R', store(*blackD), k, leaf)
+            if q < kk and dL==dO: return store('R', leaf,  (q,()), store(*bD))
+            if q > kk and dR==dO: return store('R', store(*bD), (kk,()), leaf)
 
-            if q < k: return balanceL(c, ins(dL), k, dR)
-            if q > k: return balanceR(c, dL, k, ins(dR))
+            if q < kk: return balanceL(c, ins(dL), (kk,()), dR)
+            if q > kk: return balanceR(c, dL, (kk,()), ins(dR))
         
         blacken = lambda (_,dL,k,dR): ('B',dL,k,dR)
         return store(*blacken(get(ins(d0))))
@@ -290,20 +288,20 @@ class Traversal(object):
             if d0 == dO: return (), False, None
             c, dL, k, dR = get(d0)
             if dL == dR == dO:
-                assert q == k
+                assert q == k[0]
                 return dO, True, None
-            if q <= k:
+            if q <= k[0]:
                 _dL, d, m = _del(dL)
                 if _dL == dO: return dR, c=='B', None
-                if q == k:
+                if q == k[0]:
                     assert m is not None
-                    k = m
+                    k = (m,())
                 t = (c, _dL, k, dR)
                 if d: return unbalancedR(*t) + (None,)
                 else: return store(*t), False, None
-            if q  > k:
+            if q  > k[0]:
                 _dR, d, m = _del(dR)
-                if _dR == dO: return dL, c=='B', k
+                if _dR == dO: return dL, c=='B', k[0]
                 t = (c, dL, k, _dR)
                 if d: return unbalancedL(*t) + (m,)
                 else: return store(*t), False, m
@@ -360,7 +358,8 @@ class ReplayTraversal(Traversal):
             
 
 """
-Further augmentations of the digest that provide extra functionality
+Further augmentations of the digest that provide extra functionality, such
+as selection by index and selection by weight
 """
 
 class SelectRedBlack(RedBlack):
@@ -381,7 +380,7 @@ class SelectRedBlack(RedBlack):
             while True:
                 _, dL, k, dR = self.get(d0)
                 j = dL[0]
-                if i == 0 and dL == dR == dO: return k
+                if i == 0 and dL == dR == dO: return k[0]
                 (d0,i) = (dL,i) if i < j else (dR,i-j)
             raise ValueError
 
@@ -392,8 +391,8 @@ class SelectRedBlack(RedBlack):
             while True:
                 _, dL, k, dR = self.get(d0)
                 j = dL[0]
-                if q == k and dL == dR == dO: return i + j
-                (d0,i) = (dL,i) if q <= k else (dR,i+j)
+                if q == k[0] and dL == dR == dO: return i + j
+                (d0,i) = (dL,i) if q <= k[0] else (dR,i+j)
             raise ValueError
 
         def patch(T):
@@ -427,7 +426,7 @@ class WeightSelectRedBlack(SelectRedBlack):
         def _H(d):
             if not d: return (0, (0, H(())))
             (c, dL, k, dR) = d
-            W = (k[1] if dL[1][1] == dO and dR[1][1] == dO else 
+            W = (k[1][0] if dL[1][1] == dO and dR[1][1] == dO else
                  dL[1][0] + dR[1][0])
             return dL[0] + dR[0] or 1, (W, H(d))
         self.H = _H
@@ -437,7 +436,7 @@ class WeightSelectRedBlack(SelectRedBlack):
             dO = self.dO
             while True:
                 c, dL, k, dR = self.get(d0)
-                if dL == dR == dO: return k, i
+                if dL == dR == dO: return k[0], i
                 j = dL[1][0]
                 (d0,i) = (dL,i) if i < j else (dR,i-j)
             raise ValueError

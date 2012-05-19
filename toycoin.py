@@ -66,13 +66,13 @@ class Transaction():
 
         # First remove each of the old inputs
         for inp, sig in zip(inps, sigs):
-            (_inp, (pub, amt)) = T.search((inp, None))
+            _inp, (pub, amt) = T.search(inp)
             assert _inp == inp
             assert self.verify_signature(dTx, pub, sig)
             assert amt > 0
             total_in += amt
             out = (pub,amt)
-            T = proof.send(T.delete((inp, out)))
+            T = proof.send(T.delete(inp))
 
         assert total_in > 0
         assert total_in == total_out
@@ -80,6 +80,6 @@ class Transaction():
         # Then insert each of the new outputs
         for i, out in enumerate(outs):
             inp = (dTx,i)
-            T = proof.send(T.insert((inp, out)))
+            T = proof.send(T.insert(inp, out))
 
         return T

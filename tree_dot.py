@@ -26,19 +26,20 @@ node [fontname="Arial"];
 
     def edges(D, level=0):
         if not D: return
+        h = lambda x: abs(hash(x))
 
         (c, L, (k, dL, dR), R) = D
 
-        node = 'N%d_%s' % (level, k)
+        node = 'N%d_%s' % (level, h(k))
         color, shape = (('red','ellipse') if c == 'R' else 
                         ('black', 'ellipse'))
-        yield '%s [label="(%d) %s || %d || %s", color=%s, shape=%s]\n' % \
+        yield '%s [label="(%d) %s || %s || %s", color=%s, shape=%s]\n' % \
             (node, digest(D)[0], dL[1], k, dR[1], color, shape)
 
         for dX,X,label in ((dL,L,'L'),(dR,R,'R')):
-            if X: yield '%s -> N%d_%s;\n' % (node, level+1, X[2][0])
+            if X: yield '%s -> N%d_%s;\n' % (node, level+1, h(X[2][0]))
             elif dX[0]:
-                n = 'null_%d_%s_%s' % (level+1, k, label)
+                n = 'null_%d_%s_%s' % (level+1, h(k), label)
                 yield '%s -> %s;\n' % (node, n)
                 yield '%s [shape=point, label=x];\n' % (n)
 

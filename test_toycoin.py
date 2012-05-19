@@ -60,9 +60,9 @@ directory = Directory(protocol)
 genesis = (('genesis',0), ('A', 100))
 
 def initial_tree():
-    E = protocol.RB.insert(genesis, ())
+    E = protocol.RB.insert(genesis[0], (), genesis[1])
     dE = protocol.RB.digest(E)
-    D = protocol.WSRB.insert(((0,dE), 1), ())
+    D = protocol.WSRB.insert(0, (), v=(1, dE))
     d = {dE: E}
     A = (D,d)
     return A, dE

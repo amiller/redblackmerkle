@@ -56,6 +56,7 @@ class Directory(object):
         insert = protocol.WSRB.insert
         select = protocol.WSRB.select
         record = protocol.WSRB.record
+        search = protocol.WSRB.search
         lower = protocol.RB
 
         (D,d) = self.A
@@ -64,7 +65,8 @@ class Directory(object):
 
         # Fetch the most recent tree from our timeline
         if N > 0:
-            ((t,dE),_) = select(N-1, D)
+            t = select(N-1, D)
+            _, (_, dE) = search(t, D)
             E = d[dE]
         else:
             t, E = -1, ()
@@ -79,7 +81,7 @@ class Directory(object):
         # Insert the updated tree into the upper-level tree
         (W,_) = dE
         d[dE] = E
-        D = insert(((t+1, dE), W), D)
+        D = insert(t+1, D, v=(W, dE))
 
         print "Directory advancing to", lower.digest(E)
 
@@ -94,7 +96,7 @@ class Directory(object):
 
         # Grab our snapshot of the data at time t
         (D,d) = self.A
-        ((_t,dE),_) = upper.search(((t, None), None), D)
+        _t, (_, dE) = upper.search(t, D)
         assert _t == t
         Tx = self.txs[t]
         E = d[dE]
