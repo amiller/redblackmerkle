@@ -1,0 +1,69 @@
+<script>
+ 
+  next_bit = function () { return Math.floor(Math.random()*2); }
+
+  Clock = function () {
+    this.clock = [];
+    this.i = 1;
+
+    this.tick = function () {
+      i = this.i;
+      clock = this.clock;
+
+      if (next_bit()) i++;
+      else i = 1;
+
+      for (var j = clock.length; j <= i; j++) clock[j] = 0;
+      clock[i]++;
+      clock[i-1] = 0;
+
+      this.i = i;
+    }
+
+    this.toString = function () {
+       str = '';
+       for (var i in this.clock) str = this.clock[i] + ' ' + str;
+       return str;
+    }
+    return this;
+  };
+
+
+
+  var c = new Clock();
+
+  setInterval(function () {
+    c.tick();
+    document.getElementById('clock').innerText = c.toString();
+  }, 50);
+  
+</script>
+
+<pre>
+<code>
+/*
+   Andrew Miller <amiller@dappervision.com> May 2012
+   This randomized clock simulates Poisson processes at every scale.
+ */
+
+clock = []
+i = 1;
+
+function tick() {
+
+      if (next_bit()) i++;
+      else i = 1;
+
+      clock[i]++;
+      clock[i-1] = 0;
+
+}
+</code>
+</pre>
+
+
+<pre id="clock"></pre>
+<pre>
+^ 
+   (this digit is probably 1)
+</pre>
