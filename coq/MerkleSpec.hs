@@ -29,13 +29,12 @@ instance (Hashable d r) => HashMonad Identity d r where
   hash d = return $ hash_function d
 
 -- An alternate form of HashMonad keeps a stateful 'counter' that
--- gets incremented every time a hash is computed. It doesn't matter
--- what we return, so lets just define this for unit.
-instance (Hashable d ()) => HashMonad (State Int) d () where
+-- gets incremented every time a hash is computed. 
+instance (Hashable d r) => HashMonad (State Int) d r where
   hash d = do
     x <- get; 
     put $ x + 1; 
-    return ()
+    return $ hash_function d
 
 
 -- A MerkleStructure 
