@@ -15,22 +15,21 @@ import Control.Monad.Identity (Identity)
 class (Eq d, Eq r) => Hashable d r where
   hash_function :: d -> r
 
--- Computations in the HashMonad are given access to an instruction
--- that evaluates a hash function on some input from domain d. 
+-- A computation that evaluates a hash function on some input from domain d.
 -- The hash function is otherwise hidden, so it can't be evaluated 
 -- except through this instruction
-class (Hashable d r, Monad m) => HashMonad m d r where
+class (Hashable d r, Monad m) => HashComputation m d r where
   hash :: d -> m r
   
 
 -- In the simplest case, the instruction evaluates hash_function
 -- and otherwise has no effect.
-instance (Hashable d r) => HashMonad Identity d r where
+instance (Hashable d r) => HashComputation Identity d r where
   hash d = return $ hash_function d
 
--- An alternate form of HashMonad keeps a stateful 'counter' that
+-- An alternate form of HashComputation keeps a stateful 'counter' that
 -- gets incremented every time a hash is computed. 
-instance (Hashable d r) => HashMonad (State Int) d r where
+instance (Hashable d r) => HashComputation (State Int) d r where
   hash d = do
     x <- get; 
     put $ x + 1; 
@@ -38,7 +37,7 @@ instance (Hashable d r) => HashMonad (State Int) d r where
 
 
 -- A MerkleStructure 
-class (HashMonad m d r) => MerkleInstance vo tree k v m d r where
+class (HashComputation m d r) => MerkleInstance vo tree k v m d r where
   search :: tree -> k -> m (vo, Maybe v)
   insert :: tree -> k -> v -> m (vo, r, tree)
   delete :: tree -> k -> v -> m (vo, r, tree)
@@ -47,5 +46,7 @@ class (HashMonad m d r) => MerkleInstance vo tree k v m d r where
   insert_v :: r -> k -> v -> vo -> m (Maybe r)
   delete_v :: r -> k -> v -> vo -> m (Maybe r)
   
+  
+  
 -- Further requirements:
--- 
+-- 1. Complexity when instantiate 

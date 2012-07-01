@@ -10,7 +10,7 @@ removeAll (k':ks) k
   | k' == k  = removeAll ks k
   | k' /= k  = k : removeAll ks k
 
-instance (Eq k, HashMonad m [k] r) => MerkleInstance [k] [k] k () m [k] r where
+instance (Eq k, HashComputation m [k] r) => MerkleInstance [k] [k] k () m [k] r where
 
   search ks k = return (ks, if k `elem` ks then Just () else Nothing)
   

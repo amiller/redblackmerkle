@@ -1,4 +1,5 @@
 Require Import monads.
+Require Import monads_.
 
 (* Authenticated Data Structures (Generalized Merkle Trees)
 
@@ -8,112 +9,150 @@ Require Import monads.
    Digest: a concise representation of a Tree - O(1)
 *)
 
-(* Let Digest be the range of an arbitrary hash function. Digest
+(* Let Range be the range of an arbitrary hash function. Digest
    will be provided, although the implementation gets to select
    the Domain for the hash function. Once a Domain is defined,
    the implementation must be secure for all possible hash
    functions from this Domain. This allows us to define collisions 
    very generally. *)
-Parameter Digest : Set.
+Parameter HRange : Set.
 
 Section WithDomain.
-Context (Domain : Set).
-
-Section WithHash.
-Context (h : Domain -> Digest).
+(* Introduce a Domain for a hash function, as well as an instance
+   from Domain to Range. Define a Collision of two distinct elements
+   from the Domain with the same image in Range. *)
+Context (HDomain : Set).
+Context (h : HDomain -> HRange).
 Definition Collision := {ab | match ab with (a, b) => 
                          a <> b /\ h a = h b end}.
 
-Context `{Monad M}.
-Parameter hash : Domain -> M Digest.
+(* Define a family of Monads in which a computation 'hash' is 
+   defined. We provide two instances of this family. *)
+Class HashComputation `{M0:Monad M} :=
+  hash_computation : HDomain -> M HRange.
 
-Section Instance.
-Context (Tree : Set) (VO : Set).
+(* The first instance is an identity monad, and the computation 
+   simply evaluates the hash function and returns the result. This
+   is suitable for a correctness proof. *)
+Instance HashIdC : HashComputation (M0:=IdentityMonad) := 
+  { hash_computation d := h d }.
 
-(* An operation on a Tree takes an Input, produces an Output
-   and may return a modified Tree. *)
-Definition Operation {Tree} {In} {Out} := Tree -> In -> Tree * Out.
+(* The second instance includes a counter, and the hash computation
+   increments the counter every time. *)
+Instance HashCountC : HashComputation (M0:=CountMonad) :=
+  { hash_computation d := fun c => (S c, h d) }.
 
-(* For any Operation f, Verify defines a type of secure wrapper that
-   that acts on a Digest rather than on a Tree itself. The wrapper
-   is consistent with the semantics of f and secure in this sense:
-       Any Tree that has a matching Digest but that produces a different
-       output under f can be used construct a hash collision.
+(* A computation defined for the entire family of HashMonads can only
+   be constructed by composing hash_computations using (return) and (>>=).
 *)
-Definition Verify {Domain} {h : Domain -> Digest}
-   {Tree} {digest : Tree -> Digest} {In} {Out} {VO}
-   (f : Operation) :=
-      forall (d:Digest) (i:In) (vo:VO),
-      option {x : Digest * Out &
-          forall (t : Tree),
-              digest t = d /\ 
-              x <> (match f t i with (t', o') => (digest t', o') end)
-          -> Collision}.
+Definition HashMonadComputation A := forall M `{Monad M} `{HashComputation}, M A.
 
-(* Given a Verify wrapper for Operation f, Record defines a wrapper type
-   over f that produces a VO (Verification Object) along with the output
-   so that Verify produces some correct value.
-*)
-Definition Record {Domain} {h : Domain -> Digest}
-   {Tree} {digest : Tree -> Digest} {In} {Out} {VO}
-   {f : Operation}
-   (verify : Verify (h:=h) (digest:=digest) f) :=
-      forall (t:Tree) (i:In),
-      {w : Digest * Out * VO | exists v, 
-           verify (digest t) i (snd w) = Some v /\ projT1 v = fst w}.
 
-Record MerkleSearchInstance {K} {V} {Domain} (h : Domain -> Digest) := {
-       Tree;
-       VO;
-       empty : Tree;
-       digest : Tree -> Digest;
+(* Define a type of functional maps. *)
+(* TODO: Instantiate this by borrowing from FMap.FMapInterfaces Sord*)
+Parameter Map : Set.
+Parameter empty : Map.
+Parameter size : Map -> nat.
+Parameter k v : Set.
+Parameter search : Map -> k -> option v.
+Parameter insert : Map -> k -> v -> Map.
+Parameter delete : Map -> k -> Map.
 
-       search : Tree -> K     -> Tree * option V;
-       insert : Tree -> K * V -> Tree * unit;
-       delete : Tree -> K * V -> Tree * unit;
+(*- Define a MerkleInstance type containing several sets 
+    and a handful of computations *)
+Section MerkleInstance.
+Parameter Tree : Set.
+Parameter VO : Set.
+Parameter Digest : Set.
+Parameter Empty : Tree.
 
-       search_v : Verify (digest:=digest) (h:=h) (VO:=VO) search;
-       insert_v : Verify (digest:=digest) (h:=h) (VO:=VO) insert;
-       delete_v : Verify (digest:=digest) (h:=h) (VO:=VO) delete;
+(* The computations must be defined for all Monads supporting a hash computation *)
+Section Computations.
+Context M `{Monad M}.
+Parameter digest_c : Tree -> M Digest.
+Parameter search_c : Tree -> k -> M VO.
+Parameter insert_c : Tree -> k -> v -> M (prod VO Tree).
+Parameter delete_c : Tree -> k -> M (prod VO Tree).
 
-       search_r : Record search_v;
-       insert_r : Record insert_v;
-       delete_r : Record delete_v
-}.
+Parameter search_v : Digest -> k -> VO -> M (option (option v)).
+Parameter insert_v : Digest -> k -> v -> VO -> M (option Digest).
+Parameter delete_v : Digest -> k -> VO -> M (option Digest).
 
-Record MerkleSearch (K:Set) (V:Set) := {
-    Domain : Type;
-    structure : forall h : Domain -> Digest, 
-           MerkleSearchInstance (K:=K) (V:=V) h
-}.
+Parameter search_f : Digest -> k -> VO -> VO -> M (option Collision).
+Parameter insert_f : Digest -> k -> v -> VO -> VO -> M (option Collision).
+Parameter delete_f : Digest -> k -> VO -> VO -> M (option Collision).
+End Computations.
 
-Definition test := {x : nat & x+8=10}.
-Print existT.
+(* Requirement #1: Correctness *)
+(* Define a mapping from Trees to Maps. This is a homomorphism 
+   under each of the operations. Functional correctness is
+   evaluated by using the IdM monad. 
 
-Definition test_a : test := existT (fun x => x+8=10) 2 (fun _ => 2 + 8 = 10).
-Print Verify.
+   Every *_c computation should produce a VO such that when the
+   corresponding *_v is applied to the VO, the result is the same
+   as the corresponding functional map operation. *)
 
-Definition MerkleUnit K V  `{EqDec K} `{EqDec V} Digest : MerkleSearch K V Digest :=
-   {|
-     Domain := unit;
-     structure h := {|
-        Tree := unit;
-        VO := unit;
-        empty := tt;
-        digest := h;
+Parameter T : Tree -> Map.
+Parameter T_empty : T Empty = empty.
 
-        search t k := None;
-        insert t kv := tt;
-        delete t kv := tt;
+Definition digest : Tree -> Digest := fun t => digest_c IdM t.
+Parameter search_T : forall t k, match search_c IdM t k
+                     with vo =>
+                       search_v IdM (digest t) k vo = Some (search (T t) k)
+                     end.
 
-        search_v d k vo := Some (existT None (fun t prop => tt));
-        insert_v d kv vo := None;
-        delete_v d kv vo := None;
+Parameter insert_T : forall t k v, match insert_c IdM t k v
+                     with (vo, t') => 
+                       T t' = insert (T t) k v
+                     /\ insert_v IdM (digest t) k v vo = Some (digest t')
+                     end.
 
-        search_r t k := None;
-        insert_r t k := None;
-        delete_r t k := None
-     |}
-   |}.
+Parameter delete_T : forall t k, match delete_c IdM t k
+                     with (vo, t') =>
+                        T t' = delete (T t) k
+                     /\ delete_v IdM (digest t) k vo = Some (digest t')
+                     end.
+
+(* Requirement #2. Security *)
+(* If there are logical collisions in the tree, meaning a pair of VO's 
+   that produce different outputs under search_v for some inputs, then
+   the corresponding search_f will compute a Collision in the original
+   hash function. *)
+
+Parameter search_F : forall d k vo vo' r r', 
+                      r <> r'
+                   /\ search_v IdM d k vo = Some r
+                   /\ search_v IdM d k vo' = Some r' ->
+                      exists cc, search_f IdM d k vo vo' = Some cc.
+
+Parameter insert_F : forall d k v vo vo' r r', 
+                      r <> r'
+                   /\ insert_v IdM d k v vo = Some r
+                   /\ insert_v IdM d k v vo' = Some r' ->
+                      exists cc, insert_f IdM d k v vo vo' = Some cc.
+
+Parameter delete_F : forall d k vo vo' r r', 
+                      r <> r'
+                   /\ delete_v IdM d k vo = Some r
+                   /\ delete_v IdM d k vo' = Some r' ->
+                      exists cc, delete_f IdM d k vo vo' = Some cc.
+
+
+(* Requirement #3. Complexity *)
+(* All of the computations must run in O(poly N) time. When each
+   computation is run under the Count monad, the number of accesses
+   to the hash function should be <= polybound N. N is determined
+   by the size of the equivalent mapping. *)
+
+Section Complexity.
+
+Parameter polybound : nat -> nat.
+
+Parameter search_c_C : forall t k, match search_c CountM t k 0
+                     with (c, _) => c <= polybound (size (T t)) end.
+Parameter insert_c_C : forall t k v, match insert_c CountM t k v 0
+                     with (c, _) => c <= polybound (size (T t)) end.
+Parameter delete_c_C : forall t k, match delete_c CountM t k 0
+                     with (c, _) => c <= polybound (size (T t)) end.
 
 
