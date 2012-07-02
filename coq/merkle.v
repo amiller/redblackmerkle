@@ -1,5 +1,5 @@
-Require Import monads.
-Require Import monads_.
+Require Import monads.  (* MathClasses library *)
+Require Import monads_. (* monads_.v *)
 
 (* Authenticated Data Structures (Generalized Merkle Trees)
 
@@ -34,8 +34,8 @@ Section WithDomain.
 (* Introduce a Domain for a hash function, as well as an instance
    from Domain to Range. Define a Collision of two distinct elements
    from the Domain with the same image in Range. *)
-Variables HDomain : Set.
-Variables h : HDomain -> HRange.
+Variable HDomain : Set.
+Variable h : HDomain -> HRange.
 
 Definition Collision := {ab | match ab with (a, b) => 
                          a <> b /\ h a = h b end}.
@@ -61,21 +61,29 @@ Instance HashCountC : HashComputation (M0:=StateMonad nat) :=
   { hash_computation d := fun c => (S c, h d) }.
 
 
-
-(*- Define a MerkleInstance type containing several sets 
-    and a handful of computations *)
-
 (* The computations must be defined for all Monads supporting a hash computation *)
 Class Computations M Digest VO Tree := {
+
+    (* The _c computations take a full O(N) data structure (Tree) and
+       return an O(log N) Verification Object (VO). The Server in a 
+       two-party Authenticated Data Structures protocol will perform these 
+       computations. *)
     digest_c : Tree -> M Digest;
     search_c : Tree -> k -> M VO;
     insert_c : Tree -> k -> v -> M (prod VO Tree);
     delete_c : Tree -> k -> M (prod VO Tree);
 
+    (* The _v computations take an O(1) digest and an O(log N) VO
+       and return the result of the corresponding 'Map' operation. 
+       The Client in a two-party Authenticated Data Structures protocol 
+       would perform this computation. *)
     search_v : Digest -> k -> VO -> M (option (option v));
     insert_v : Digest -> k -> v -> VO -> M (option Digest);
     delete_v : Digest -> k -> VO -> M (option Digest);
 
+    (* The _f are the  computations take a pair of VOs and produce a 
+       Collision if the VOs result in conflicting answers when applied 
+       to the corresponding _v. *)
     search_f : Digest -> k -> VO -> VO -> M (option Collision);
     insert_f : Digest -> k -> v -> VO -> VO -> M (option Collision);
     delete_f : Digest -> k -> VO -> VO -> M (option Collision)
