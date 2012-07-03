@@ -9,7 +9,10 @@ Definition IdM_Bind : MonadBind IdM := fun A B ma f => f ma.
 
 (* TODO *)
 (* Prove monad laws? *)
-Instance IdentityMonad : Monad IdM (H:=IdM_Return) (H0:=IdM_Bind). 
+Proposition IdM_Me : forall A : Type, Equiv A -> Equiv (IdM A).
+auto. Qed.
+
+Instance IdentityMonad : Monad IdM (Me:=IdM_Me) (H:=IdM_Return) (H0:=IdM_Bind). 
 admit. Defined.
 
 
