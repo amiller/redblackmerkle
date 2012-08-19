@@ -91,9 +91,10 @@ def apply_transaction(D, (tx_id, txn)):
 
     return D
     
-# Start with an empty_tree
-MerkleTree = ()
+def main():
+    # Start with an empty_tree
+    MerkleTree = ()
 
-def merkle_scan():
-    # Return 
-    pass
+    txs = transactions_in_order()
+    for txn in txs:
+        MerkleTree = apply_transaction(MerkleTree, txn)
