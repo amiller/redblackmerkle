@@ -4,8 +4,6 @@ from Crypto.Hash import SHA256
 import json
 import redblack; reload(redblack)
 from redblack import RedBlack
-from redblack import SelectRedBlack
-from redblack import WeightSelectRedBlack
 from redblack import RecordTraversal, ReplayTraversal
 
 
@@ -168,77 +166,6 @@ class RedBlackTest(unittest.TestCase):
                 invariants(self.RB, D)
                 ref.remove((i,chr(i)))
                 assert inorder_traversal(self.RB, D) == sorted(ref)
-
-
-class SelectRedBlackTest(unittest.TestCase):
-    def setUp(self):
-        H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()
-        self.RB = SelectRedBlack(H)
-
-    def test_sequential(self):
-        insert = self.RB.insert
-        size = self.RB.size
-        D = ()
-        for i in range(10):
-            D = insert(i, D)
-            assert size(D) == i+1
-            invariants(self.RB, D)
-
-    def test_select(self):
-        insert = self.RB.insert
-        record = self.RB.record
-        replay = self.RB.replay
-        search = self.RB.search
-        digest = self.RB.digest
-        select = self.RB.select
-        rank = self.RB.rank
-        N = 100
-        D = ()
-        values = range(N)
-        random.shuffle(values)
-        for v in values: D = insert(v, D)
-
-        for _ in range(100):
-            i = random.randint(0,N-1)
-            v = select(i, D)
-            assert i == rank(v, D)
-
-            T = record(D)
-            k = T.search(v)
-            assert replay(digest(D), T.VO).rank(v) == i
-            assert replay(digest(D), T.VO).select(i) == v
-
-
-class WeightSelectRedBlackTest(unittest.TestCase):
-    def setUp(self):
-        H = lambda x: '' if not x else SHA256.new(json.dumps(x)).hexdigest()
-        self.RB = WeightSelectRedBlack(H)
-
-    def test_weight(self):
-        insert = self.RB.insert
-        digest = self.RB.digest
-        select_weight = self.RB.select_weight
-        within_eps = lambda a,b: abs(a-b) < 1e-5
-        D = ()
-        N = 100
-        weights = [random.randint(0,100) for _ in range(N)]
-        weights = [w / float(sum(weights)) for w in weights]
-        assert within_eps(sum(weights), 1)
-        total = 0.
-        for i,w in enumerate(weights):
-            total += w
-            D = insert(i, D, v=(w,))
-            (_, (W, _)) = digest(D)
-            assert within_eps(W, total)
-
-        cumpdf = [sum(weights[:i]) for i in range(N)]
-        for r in [random.random() for _ in range(20)]:
-            i, residue = select_weight(r, D)
-            assert cumpdf[i] <= r
-            assert within_eps(cumpdf[i] + residue, r)
-            assert i == N-1 or cumpdf[i+1] > r
-
-
 
 if __name__ == '__main__':
     unittest.main()
