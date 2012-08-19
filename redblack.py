@@ -115,6 +115,9 @@ VO:
     TODO: I think these are wrong! How to construct the worst case?
 """
 
+class DuplicateElementError(ValueError):
+    pass
+
 import math
 import itertools
 
@@ -263,7 +266,8 @@ class Traversal(object):
             bD = ('B', dL, k, dR)
             kk, _ = k
 
-            assert q != kk, "Can't insert duplicate element"
+            if q == kk:
+                raise DuplicateElementError("Can't insert duplicate element")
 
             if q < kk and dL==dO: return store('R', leaf,  (q,()), store(*bD))
             if q > kk and dR==dO: return store('R', store(*bD), (kk,()), leaf)

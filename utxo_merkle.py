@@ -9,7 +9,7 @@
 from Crypto.Hash import SHA256
 import struct
 
-from redblack import RedBlack
+from redblack import RedBlack, DuplicateElementError
 
 # Genesis (sentinel value) is a hash of all zero bits, it's also the digest
 # of an empty node
