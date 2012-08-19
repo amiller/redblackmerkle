@@ -11,6 +11,10 @@ Authenticated Data Structures are used in protocols between three parties: 1) th
 
 - merkle_scan.py: a script that iterates through the Bitcoin blockchain, from the genesis block to the head, incrementally updating the <code>RedBlack</code> as it goes (requires Gavin Andresen's <a href="https://github.com/gavinandresen/bitcointools">python bitcointools</a>.
 
+- treedot: produces graphviz illustrations of the tree (requires graphviz (dot))
+
+- test_redblack: unit tests for <code>RedBlack</code>
+
 Illustrations
 =============
 
