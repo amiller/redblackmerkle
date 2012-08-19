@@ -85,16 +85,18 @@ def apply_transaction(D, (tx_id, txn)):
         try:
             D = insert(("TXID", tx_id, idx), D)
         except DuplicateElementError as e:
-            pass # Ignore duplicate elements (relevant prior to BIP34)
-
+            pass # Ignore duplicate elements (relevant prior to BIP30)
         #print 'Inserted: ', ("TXID", hexlify(tx_id[::-1]), idx)
 
     return D
+
     
 def main():
     # Start with an empty_tree
+    global MerkleTree
     MerkleTree = ()
 
     txs = transactions_in_order()
-    for txn in txs:
+    for i,txn in enumerate(txs):
         MerkleTree = apply_transaction(MerkleTree, txn)
+        if i >= 200000: break
