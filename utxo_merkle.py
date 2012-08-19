@@ -13,7 +13,7 @@ from redblack import RedBlack
 
 # Genesis (sentinel value) is a hash of all zero bits, it's also the digest
 # of an empty node
-genesis = bytearray(32 * chr(0))
+genesis = 32 * chr(0)
 
 def MerkleNodeDigest(D):
     """
@@ -24,8 +24,8 @@ def MerkleNodeDigest(D):
     Args:
         D: a tree node, one of the following
            - ()                         (empty node)
-           - (c, H(Left), k, H(Right))  (branch node)
-           - (c, H(()), k, H(()))       (leaf node)
+           - (c, H(Left), (k,_), H(Right))  (branch node)
+           - (c, H(()), (k,_), H(()))       (leaf node)
 
            where,
         
@@ -42,7 +42,7 @@ def MerkleNodeDigest(D):
         keys are sorted by lexical ordering in this format
 
     Returns: 
-        Digest: a 256 bit bytearray (len(Digest)==32), output of SHA256
+        Digest: a 256 bit string (len(Digest)==32), output of SHA256
 
         Nodes are serialized according to the following format:
 
@@ -66,33 +66,33 @@ def MerkleNodeDigest(D):
     if not D: return genesis
 
     # Otherwise, it's a branch or a leaf. No need for a separate case.
-    (c, dL, k, dR) = D
+    (c, dL, (k,_), dR) = D
 
     # Sanity checks
-    assert type(dL) is bytearray and len(dL) == 32
-    assert type(dR) is bytearray and len(dR) == 32
+    assert type(dL) is str and len(dL) == 32
+    assert type(dR) is str and len(dR) == 32
     assert c in ("R", "B")
     assert k[0] in ("TXID", "ADDR")
 
     # UTXO table, indexed by TXID
     if k[0] == "TXID":
         (_, txhash, index) = k
-        assert type(txhash) is bytearray and len(txhash) == 32
+        assert type(txhash) is str and len(txhash) == 32
         assert type(index) is int and 0 <= index <= (1<<32)-1
-        serial = struct.pack("ssssc<4is", c, k[0], dL, txhash, index, dR)
+        serial = struct.pack("<c4s32s32sI32s", c, k[0], dL, txhash, index, dR)
         assert len(serial) == 105
 
     # UTXO table, indexed by address (standard TXOUT only)
     if k[0] == "ADDR":
         (_, addr, txhash, index) = k
-        assert type(addr) is bytearray and len(addr) == 20
-        assert type(txhash) is bytearray and len(txhash) == 32
+        assert type(addr) is str and len(addr) == 20
+        assert type(txhash) is str and len(txhash) == 32
         assert type(index) is int and 0 <= index <= (1<<32)-1
-        serial = struct.pack("sssssc<4is", c, k[0], dL, addr, txhash, index, dR)
+        serial = struct.pack("<c4s32s20s32sI32s", c, k[0], dL, addr, txhash, index, dR)
         assert len(serial) == 125
-        
+
     # Hash it up
-    return bytearray(SHA256.new(serial).digest())
+    return SHA256.new(serial).digest()
 
 # Use this digest function to create a specialized instance of the RedBlack tree
 RB = RedBlack(MerkleNodeDigest)
