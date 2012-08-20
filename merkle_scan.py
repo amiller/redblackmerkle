@@ -11,7 +11,7 @@ from bitcointools.BCDataStream import BCDataStream
 
 import utxo_merkle
 reload(utxo_merkle)
-from utxo_merkle import RB, genesis, DuplicateElementError
+from utxo_merkle import RB, genesis, DuplicateElementError, utxo_hash
 
 record = RB.record
 replay = RB.replay
@@ -47,7 +47,7 @@ def blocks_in_order():
         yield read_block(cursor, h)
 
 def transactions_in_block(block_data):
-    print 'Block: ', block_data['nHeight'], hexlify(block_data['hash256'][::-1])
+    #print 'Block: ', block_data['nHeight'], hexlify(block_data['hash256'][::-1])
     block_datastream.seek_file(block_data['nBlockPos'])
     vds = block_datastream
     d = parse_BlockHeader(vds)
@@ -62,13 +62,13 @@ def transactions_in_block(block_data):
         vds.seek_file(start)
         txdata = vds.read_bytes(end-start)
         tx_id = SHA256.new(SHA256.new(txdata).digest()).digest()
-        yield tx_id, txn
+        yield block_data['nHeight'], tx_id, txn
 
 transactions_in_order = lambda: chain.from_iterable(imap(transactions_in_block,
                                                          blocks_in_order()))
 
 
-def apply_transaction(D, (tx_id, txn)):
+def apply_transaction(D, (nHeight, tx_id, txn)):
     # Remove all the spent txins
     #print 'Applying txn:', hexlify(tx_id[::-1])
     for txin in txn['txIn']:
@@ -77,26 +77,37 @@ def apply_transaction(D, (tx_id, txn)):
 
         if prevout_hash == genesis: continue # Ignore coinbase txns
 
-        D = delete(("TXID", prevout_hash, prevout_n), D)
+        D = delete(("UTXO", prevout_hash, prevout_n), D)
         #print 'Deleted: ', ("TXID", hexlify(prevout_hash[::-1]), prevout_n)
 
     # Insert all the new txouts
     for idx,txout in enumerate(txn['txOut']):
         try:
-            D = insert(("TXID", tx_id, idx), D)
+            v = utxo_hash(idx==0, nHeight, txout['value'], txout['scriptPubKey'])
+            D = insert(("UTXO", tx_id, idx), D, v)
+
         except DuplicateElementError as e:
             pass # Ignore duplicate elements (relevant prior to BIP30)
         #print 'Inserted: ', ("TXID", hexlify(tx_id[::-1]), idx)
 
     return D
 
+
+import numpy as np
     
 def main():
     # Start with an empty_tree
-    global MerkleTree
+    global MerkleTree, Trees
     MerkleTree = ()
 
     txs = transactions_in_order()
-    for i,txn in enumerate(txs):
-        MerkleTree = apply_transaction(MerkleTree, txn)
-        if i >= 200000: break
+    Trees = []
+    utxo_size = 0
+    txouts = 0
+    for i,(nHeight,tx_id,txn) in enumerate(txs):
+        MerkleTree = apply_transaction(MerkleTree, (nHeight,tx_id,txn))
+        utxo_size += len(txn['txOut']) - len([1 for txin in txn['txIn'] if txin['prevout_hash'] != genesis])
+        txouts += len(txn['txOut'])
+        Trees.append(MerkleTree)
+        print i, np.log2(float(utxo_size)), utxo_size, txouts, hexlify(RB.digest(MerkleTree))
+        if i >= 100000: break
