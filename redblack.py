@@ -118,52 +118,15 @@ VO:
 class DuplicateElementError(ValueError):
     pass
 
-import math
-import itertools
+from itertools import izip
 
 class RedBlack(object):
-    def __init__(self, H=hash):
+    def __init__(self, E=()):
         """
         Args:
-             H (optional): a collision-resistant hash function that
-                           takes arguments of the form:
-                  H(())
-                  H((c, dL, k, dR))
+            E: the empty tree
         """
-        self.H = H
-        self.dO = self.digest(())
-
-    def digest(self, D):
-        if not D: return self.H(())
-        (c, _, (k, dL, dR), _) = D
-        return self.H((c, dL, k, dR))
-
-    def record(self, D):
-        return RecordTraversal(self.H, D)
-
-    def replay(self, d0, VO):
-        return ReplayTraversal(self.H, d0, VO)
-
-    def search(self, q, D):
-        T = self.record(D)
-        return T.search(q)
-
-    def insert(self, q, D, v=''):
-        T = self.record(D)
-        return T.reconstruct(T.insert(q, v))
-
-    def delete(self, q, D):
-        T = self.record(D)
-        return T.reconstruct(T.delete(q))
-
-
-class Traversal(object):
-    def __init__(self, H, d0):
-        self.H = H
-        self.cache = {}
-        self.dO = H(())
-        self.d0 = d0
-
+        self.E = E
         # TODO: each of the balance operations sometimes produces more 
         # 'proof' than is necessary. For example, if bL2 is a match,
         # then a 'negative proof' for bL1 is unnecessary. Is there a way
@@ -174,35 +137,50 @@ class Traversal(object):
         self.bR1 = (B,a,x,(R,(R,b,y,c),z,d)), (R,(B,a,x,b),y,(B,c,z,d))
         self.bR2 = (B,a,x,(R,b,y,(R,c,z,d))), (R,(B,a,x,b),y,(B,c,z,d))
 
-    def balanceL(self, c, dL, k, dR):
-        d = self.store(c, dL, k, dR)
-        return self.match(self.bL1, d) or self.match(self.bL2, d) or d
+    """ 
+    These are the default "context" functions. They simply pass through
+    the node type as the digest type
+    """
+    def empty(self, D):
+        return D == self.E
 
-    def balanceR(self, c, dL, k, dR):
-        d = self.store(c, dL, k, dR)
-        return self.match(self.bR1, d) or self.match(self.bR2, d) or d
+    def store(self, c, L, k, R):
+        return (c, L, k, R)
+                                   
+    def get(self, D):
+        return D
 
-    def unbalancedL(self, c, dL, k, dR):
-        get = self.get
+
+    """
+    These are the balancing routines, defined as actions in this context
+    """
+    def balanceL(self, c, L, k, R):
+        D = self.store(c, L, k, R)
+        return self.match(self.bL1, D) or self.match(self.bL2, D) or D
+
+    def balanceR(self, c, L, k, R):
+        D = self.store(c, L, k, R)
+        return self.match(self.bR1, D) or self.match(self.bR2, D) or D
+
+    def unbalancedL(self, c, L, k, R):
         store = self.store
         balanceL = self.balanceL
-        red = lambda (_,dL,x,dR): ('R',dL,x,dR)
-        (_c, _dL, _k, _dR) = get(dL)
-        if _c == 'B': return balanceL('B',store('R',_dL,_k,_dR),k,dR), c=='B'
-        _R = get(_dR)
+        red = lambda (_,L,x,R): ('R',L,x,R)
+        (_c, _L, _k, _R) = self.get(L)
+        if _c == 'B': return balanceL('B',store('R',_L,_k,_R),k,R), c=='B'
+        _R = self.get(_R)
         assert c == 'B' and _c == 'R' and _R[0] == 'B'
-        return store('B',_dL,_k,balanceL('B',store(*red(_R)),k,dR)), False
+        return store('B',_L,_k,balanceL('B',store(*red(_R)),k,R)), False
 
-    def unbalancedR(self, c, dL, k, dR):
-        get = self.get
+    def unbalancedR(self, c, L, k, R):
         store = self.store
         balanceR = self.balanceR
-        red = lambda (_,dL,x,dR): ('R',dL,x,dR)
-        (_c, _dL, _k, _dR) = get(dR)
-        if _c == 'B': return balanceR('B',dL,k,store('R',_dL,_k,_dR)), c=='B'
-        _L = get(_dL)
+        red = lambda (_,L,x,R): ('R',L,x,R)
+        (_c, _L, _k, _R) = self.get(R)
+        if _c == 'B': return balanceR('B',L,k,store('R',_L,_k,_R)), c=='B'
+        _L = self.get(_L)
         assert c == 'B' and _c == 'R' and _L[0] == 'B'
-        return store('B',balanceR('B',dL,k,store(*red(_L))),_k,_dR), False
+        return store('B',balanceR('B',L,k,store(*red(_L))),_k,_R), False
 
     def match(self, (lhs, rhs), value):
         # Simulates Haskell pattern matching so we can copy the Okasaki
@@ -210,13 +188,12 @@ class Traversal(object):
         table = {}
         get = self.get
         store = self.store
-        dO = self.dO
 
         def _match(left, value):
             if left in ('R','B'): return left == value
             if isinstance(left, tuple):
-                return value != dO and all((_match(*pair) for pair in
-                                            itertools.izip(left, get(value))))
+                return not self.empty(value) and all((_match(*pair) for pair in
+                                            izip(left, get(value))))
             table[left] = value
             return True
 
@@ -224,69 +201,61 @@ class Traversal(object):
             if right in ('R','B'): return right
             if isinstance(right, tuple):
                 return store(*(_constr(*pair) for pair in
-                               zip(right, get(value))))
+                               izip(right, get(value))))
             return table[right]
 
         return _constr(rhs, value) if _match(lhs, value) else None
 
-    def store(self, c, dL, k, dR):
-        C = (c, dL, k, dR)
-        d0 = self.H(C)
-        self.cache[d0] = C
-        return d0
-                                   
-    def get(self, d0):
-        return self.cache[d0]
 
 
     """
     Search, Insert, Delete
     """
     
-    def search(self, q):
-        d0 = self.d0
+    def search(self, q, D):
         while True:            
-            c, dL, k, dR = self.get(d0)
-            if dL == dR == self.dO: return k
-            d0 = dL if q <= k[0] else dR
+            c, L, k, R = self.get(D)
+            if self.empty(L) and self.empty(R): return k
+            D = L if q <= k[0] else R
 
-    def insert(self, q, v=''):
+    def insert(self, q, D, v=''):
         balanceL = self.balanceL
         balanceR = self.balanceR
         store = self.store
         get = self.get
-        dO = self.dO
-        d0 = self.d0
+        E = self.E
+        empty = self.empty
 
-        leaf = store('B', dO, (q,v), dO)
-        if d0 == dO: return leaf
+        leaf = store('B', E, (q,v), E)
+        if empty(D): return leaf
 
-        def ins(d0):
-            (c, dL, k, dR) = get(d0)
-            bD = ('B', dL, k, dR)
+        def ins(D):
+            (c, L, k, R) = get(D)
+            node = ('B', L, k, R)
             kk, _ = k
 
             if q == kk:
                 raise DuplicateElementError("Can't insert duplicate element")
 
-            if q < kk and dL==dO: return store('R', leaf,  (q,()), store(*bD))
-            if q > kk and dR==dO: return store('R', store(*bD), (kk,()), leaf)
+            if q < kk and empty(L): return store('R', leaf,  (q,()), store(*node))
+            if q > kk and empty(R): return store('R', store(*node), (kk,()), leaf)
 
-            if q < kk: return balanceL(c, ins(dL), (kk,()), dR)
-            if q > kk: return balanceR(c, dL, (kk,()), ins(dR))
+            if q < kk: return balanceL(c, ins(L), (kk,()), R)
+            if q > kk: return balanceR(c, L, (kk,()), ins(R))
         
-        blacken = lambda (_,dL,k,dR): ('B',dL,k,dR)
-        return store(*blacken(get(ins(d0))))
+        blacken = lambda (_,L,k,R): ('B',L,k,R)
+        return store(*blacken(get(ins(D))))
 
 
-    def delete(self, q):
+    def delete(self, q, D):
         unbalancedL = self.unbalancedL
         unbalancedR = self.unbalancedR
         store = self.store
         get = self.get
-        dO = self.dO
+        empty = self.empty
+        E = self.E
 
-        def _del(d0):
+        def _del(D):
             """
             This function recursively 'bubbles' up three values
             First, the digest of the subtree after deleting the element
@@ -294,54 +263,33 @@ class Traversal(object):
             Third, the maximum value in the subtree, in case the previous 
                    maximum was the deleted element
             """
-            if d0 == dO: return (), False, None
-            c, dL, k, dR = get(d0)
-            if dL == dR == dO:
+            if empty(D): return self.E, False, None
+            c, L, k, R = get(D)
+            if empty(L) and empty(R):
                 assert q == k[0]
-                return dO, True, None
+                return E, True, None
             if q <= k[0]:
-                _dL, d, m = _del(dL)
-                if _dL == dO: return dR, c=='B', None
+                _L, d, m = _del(L)
+                if empty(_L): return R, c=='B', None
                 if q == k[0]:
                     assert m is not None
                     k = (m,())
-                t = (c, _dL, k, dR)
+                t = (c, _L, k, R)
                 if d: return unbalancedR(*t) + (None,)
                 else: return store(*t), False, None
             if q  > k[0]:
-                _dR, d, m = _del(dR)
-                if _dR == dO: return dL, c=='B', k[0]
-                t = (c, dL, k, _dR)
+                _R, d, m = _del(R)
+                if empty(_R): return L, c=='B', k[0]
+                t = (c, L, k, _R)
                 if d: return unbalancedL(*t) + (m,)
                 else: return store(*t), False, m
 
-        blacken = lambda (_,dL,x,dR): ('B',dL,x,dR)
-        d, _, _ = _del(self.d0)
-        return dO if d == dO else store(*blacken(get(d)))
+        blacken = lambda (_,L,x,R): ('B',L,x,R)
+        d, _, _ = _del(D)
+        return E if empty(d) else store(*blacken(get(d)))
 
 
-class RecordTraversal(Traversal):
-    def __init__(self, H, D):
-        c = lambda (c, _, (k, dL, dR), __): (c, dL, k, dR)
-        d0 = H(c(D) if D else ())
-        super(RecordTraversal,self).__init__(H, d0)
-        self.d = {d0: D}
-        self.VO = []
-
-    def get(self, d0):
-        try:
-            return super(RecordTraversal,self).get(d0)
-        except KeyError:
-            D = self.d[d0]
-            (c, L, (k, dL, dR), R) = D
-            C = (c, dL, k, dR)
-            self.d[dL] = L
-            self.d[dR] = R
-            self.cache[d0] = C
-            self.VO.append(C)
-            return C
-
-    def reconstruct(self, d0):
+    def preorder_traversal(self, D):
         def _recons(d0):
             if d0 == self.dO: return ()
             if d0 in self.d: return self.d[d0]
@@ -351,16 +299,85 @@ class RecordTraversal(Traversal):
         return _recons(d0)
 
 
-class ReplayTraversal(Traversal):
-    def __init__(self, H, d0, VO):
-        super(ReplayTraversal,self).__init__(H, d0)
+
+class MerkleRedBlack(RedBlack):
+    """Pass-through context (Identity)
+    """
+    def __init__(self, H=hash, E=()):
+        self.H = H
+        super(MerkleRedBlack,self).__init__((E,()))
+
+    def store(self, c, (dL,L), k, (dR,R)):
+        return (self.H((c, dL, k, dR)), (c, (dL,L), k, (dR,R)))
+
+    def get(self, (_,D)):
+        return D
+
+
+class HashTableRB(RedBlack):
+    def __init__(self, H=hash, E=(), table=None, validate=True):
+        self.H = H
+        if table is None: table = {}
+        self.table = table
+        self.cache = {}
+        self.validate = validate
+        super(HashTableRB,self).__init__(E)
+
+    def store(self, c, dL, k, dR):
+        preimage = (c, dL, k, dR)
+        try:
+            # First check the preimage cache
+            return self.cache[preimage]
+        except KeyError:
+            # Recompute the digest
+            digest = self.H(preimage)
+            self.cache[preimage] = digest
+            try:
+                assert self.table[digest] == preimage
+            except KeyError:
+                self.table[digest] = preimage
+            return digest
+
+    def get(self, digest):
+        preimage = self.table[digest]
+        if self.validate: assert self.H(preimage) == digest
+        self.cache[preimage] = digest
+        return preimage
+
+    def reconstruct(self, digest):
+        def _recons(d0):
+            if self.empty(d0): return (),()
+            try:
+                preimage = self.get(d0)
+                (c, dL, k, dR) = preimage
+                return d0, (c, (dL, _recons(dL)), k, (dR, _recons(dR)))
+            except KeyError:
+                if not self.validate: return (),()
+                else: raise
+        return _recons(digest)
+
+
+class RecordTraversal(MerkleRedBlack):
+    def __init__(self, H=hash, E=()):
+        """Record a stream of "gets" from a passthrough tree
+        """
+        super(RecordTraversal,self).__init__(H, E)
+        self.VO = []
+
+    def get(self, (_,D)):
+        c, (dL,_), k, (dR,_) = D
+        #print 'Record:', (c, dL, k, dR)
+        self.VO.append((c, dL, k, dR))
+        return D
+
+
+class ReplayTraversal(HashTableRB):
+    def __init__(self, VO, H=hash, E=()):
+        super(ReplayTraversal,self).__init__(H, E)
         self.VO = iter(VO)
 
     def get(self, d0):
-        try:
-            return super(ReplayTraversal,self).get(d0)
-        except KeyError:
-            C = self.VO.next()
-            assert self.H(C) == d0
-            self.cache[d0] = C
-            return C
+        preimage = self.VO.next()
+        #print 'Replay:', d0, preimage
+        assert self.H(preimage) == d0
+        return preimage

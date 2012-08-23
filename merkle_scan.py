@@ -9,15 +9,21 @@ from bitcointools.block import scan_blocks, _open_blkindex, read_block
 from bitcointools.util import create_env
 from bitcointools.BCDataStream import BCDataStream
 
+import struct
+
+import redblack
+reload(redblack)
+from redblack import MerkleRedBlack, HashTableRB
+
 import utxo_merkle
 reload(utxo_merkle)
-from utxo_merkle import RB, genesis, DuplicateElementError, utxo_hash
+from utxo_merkle import genesis, DuplicateElementError, utxo_hash, MerkleNodeDigest
 
-record = RB.record
-replay = RB.replay
-insert = RB.insert
-delete = RB.delete
-search = RB.search
+import json
+
+#import leveldb_traversal
+#reload(leveldb_traversal)
+#import leveldb
 
 db_dir = "/home/amiller/.bitcoin/testdb"
 db_env = create_env(db_dir)
@@ -44,6 +50,7 @@ def blocks_in_order():
 
     cursor = db.cursor()
     for h in hash_cache[::-1]:
+        #print hexlify(h[::-1])
         yield read_block(cursor, h)
 
 def transactions_in_block(block_data):
@@ -68,7 +75,7 @@ transactions_in_order = lambda: chain.from_iterable(imap(transactions_in_block,
                                                          blocks_in_order()))
 
 
-def apply_transaction(D, (nHeight, tx_id, txn)):
+def apply_transaction(RB, D, (nHeight, tx_id, txn)):
     # Remove all the spent txins
     #print 'Applying txn:', hexlify(tx_id[::-1])
     for txin in txn['txIn']:
@@ -77,14 +84,25 @@ def apply_transaction(D, (nHeight, tx_id, txn)):
 
         if prevout_hash == genesis: continue # Ignore coinbase txns
 
-        D = delete(("UTXO", prevout_hash, prevout_n), D)
+        key = ("UTXO", prevout_hash, prevout_n)
+
+        if 0:
+            (_,utxo) = RB.search(key, D)
+            serial = struct.pack("<4s32sI32s", "UTXO", tx_id, prevout_n, utxo)
+            print json.dumps(["delete", hexlify(serial)])
+
+        D = RB.delete(key, D)
         #print 'Deleted: ', ("TXID", hexlify(prevout_hash[::-1]), prevout_n)
 
     # Insert all the new txouts
     for idx,txout in enumerate(txn['txOut']):
         try:
             v = utxo_hash(idx==0, nHeight, txout['value'], txout['scriptPubKey'])
-            D = insert(("UTXO", tx_id, idx), D, v)
+            D = RB.insert(("UTXO", tx_id, idx), D, v)
+
+            if 0:
+                serial = struct.pack("<4s32sI32s", "UTXO", tx_id, idx, v)
+                print json.dumps(["insert", hexlify(serial)])
 
         except DuplicateElementError as e:
             pass # Ignore duplicate elements (relevant prior to BIP30)
@@ -94,20 +112,49 @@ def apply_transaction(D, (nHeight, tx_id, txn)):
 
 
 import numpy as np
-    
+import leveldb
+import cPickle as pickle
+
+if not 'hashtable' in globals():
+    hashtable = leveldb.LevelDB('./bitcoin/bitcoin_hashtable')
+
+class LevelDict(object):
+    def __init__(self, db):
+        self.db = db
+
+    def __getitem__(self, k):
+        return pickle.loads(self.db.Get(k))
+
+    def __setitem__(self, k, v):
+        self.db.Put(k, pickle.dumps(v,-1))
+
+from binascii import unhexlify
 def main():
     # Start with an empty_tree
     global MerkleTree, Trees
-    MerkleTree = ()
+    RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
+
+    #start = 226274; MerkleTree = unhexlify("8f19e9e653edbe752e346585bfbe10711ff372f9810e96df4c2fc9d306452bb1")
+    #start = 216573; MerkleTree = unhexlify("ac3b14a1a4295ce58b27d5eb6925364ec5f75e39ad0fc4a211fb76895776dc42")
+    #start = 175005; MerkleTree = unhexlify("e4ca15dd2b5f8063e340ed884924a9355719fb341a7a4bdc513d173ab609ec0b")
+    #start = 128285; MerkleTree = unhexlify("74ac1d7315faa41b21ef8546e6baed5dc50d29fbd28f07d796c2b8141770dd2a")
+    #start = 26528; MerkleTree = unhexlify('4f56e9c4f27b8acd59beb7dac8236602107b957e96422cbb8974e1d787cd2425')
+    #start = 10092; MerkleTree = unhexlify('06fcf352f291a6f7242590266c0d80ca6514b779f8b9c4803887c0bf415b028c')
+    #start = 1532; MerkleTree = unhexlify('c52fe74601b83ef8e55c138293741901ae474d34d7dbf344713f0a21bbc5fe5c')
+    start = -1; MerkleTree = RB.E
 
     txs = transactions_in_order()
+
     Trees = []
     utxo_size = 0
     txouts = 0
     for i,(nHeight,tx_id,txn) in enumerate(txs):
-        MerkleTree = apply_transaction(MerkleTree, (nHeight,tx_id,txn))
-        utxo_size += len(txn['txOut']) - len([1 for txin in txn['txIn'] if txin['prevout_hash'] != genesis])
-        txouts += len(txn['txOut'])
+        RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
+        if i <= start: continue
+        MerkleTree = apply_transaction(RB, MerkleTree, (nHeight,tx_id,txn))
+        #utxo_size += len(txn['txOut']) - len([1 for txin in txn['txIn'] if txin['prevout_hash'] != genesis])
+        #txouts += len(txn['txOut'])
         Trees.append(MerkleTree)
-        print i, np.log2(float(utxo_size)), utxo_size, txouts, hexlify(RB.digest(MerkleTree))
-        if i >= 100000: break
+        print i, hexlify(MerkleTree)
+        #if nHeight >= 200000: break
+        if nHeight >= 1000: break

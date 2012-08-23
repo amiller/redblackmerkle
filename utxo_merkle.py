@@ -7,15 +7,15 @@
 """
 
 from Crypto.Hash import SHA256
+from redblack import MerkleRedBlack, DuplicateElementError
 import struct
 
-from redblack import RedBlack, DuplicateElementError
 
 # Genesis (sentinel value) is a hash of all zero bits, it's also the digest
 # of an empty node
 genesis = 32 * chr(0)
 
-def MerkleNodeDigest(D):
+def Serialize((c, dL, (k,v), dR)):
     """
     This function defines the serialization format for each node in the 
     UTXO balanced merkle tree. This function is passed (as H) to RedBlack(H)
@@ -90,13 +90,9 @@ def MerkleNodeDigest(D):
 
     """
 
-    # Empty node
-    if not D: return genesis
-
-    # Otherwise, it's a branch or a leaf. No need for a separate case.
-    (c, dL, (k,v), dR) = D
-
     # Sanity checks
+    if not dL: dL = genesis
+    if not dR: dR = genesis
     assert type(dL) is str and len(dL) == 32
     assert type(dR) is str and len(dR) == 32
     assert c in ("R", "B")
@@ -110,7 +106,7 @@ def MerkleNodeDigest(D):
 
         if dL == dR == genesis:
             # Leaf node
-            assert type(v) is str and len(v) == 32        
+            assert type(v) is str and len(v) == 32
             serial = struct.pack("<cc4s32sI32s", '.', c, k[0], txhash, index, v)
             assert len(serial) == 74
 
@@ -139,7 +135,10 @@ def MerkleNodeDigest(D):
             serial = struct.pack("<c4s32s20s32sI32s", c, k[0], dL, addr, txhash, index, dR)
             assert len(serial) == 125
 
-    # Hash it up
+    return serial
+
+def MerkleNodeDigest(D):
+    serial = Serialize(D)
     return SHA256.new(serial).digest()
 
 
@@ -164,11 +163,8 @@ def utxo_hash(isCoinbase, nHeight, amount, scriptPubKey):
     """
     isCoinbase = int(bool(isCoinbase)) # Coerce to a one bit int
     assert type(nHeight) is int
-    assert type(amount) in (int,long) and 0 < amount < 21E14 # MAX_MONEY
+    assert type(amount) in (int,long) and 0 <= amount < 21E14 # MAX_MONEY
     assert type(scriptPubKey) is str
 
     serial = struct.pack("<BIQs", isCoinbase, nHeight, amount, scriptPubKey)
     return SHA256.new(serial).digest()
-
-# Use this digest function to create a specialized instance of the RedBlack tree
-RB = RedBlack(MerkleNodeDigest)

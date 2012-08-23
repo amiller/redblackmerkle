@@ -14,7 +14,7 @@ def invariants(RB, D):
     # value in its left subtree.
     def _greatest(D):
         if not D: return
-        (c, L, ((k,v), _, _), R) = D
+        (c, L, (k,v), R) = D
         assert bool(L) == bool(R)
         if L and R:
             assert v == ()
@@ -45,27 +45,17 @@ def invariants(RB, D):
         assert p == _paths_black(R)
         return p + (c == 'B')
 
-    # Merkle tree digests must be computed correctly
-    def _digests(D):
-        if not D: return
-        (c, L, (k, dL, dR), R) = D
-        if L: assert dL == RB.digest(L)
-        if R: assert dR == RB.digest(R)
-        _digests(L)
-        _digests(R)
-
     _greatest(D)
     _redparent(D)
     _paths_black(D)
-    _digests(D)
 
 
 def inorder_traversal(RB, D):
     inorder = []
     def _set(D):
         if not D: return
-        (_, L, (k, dL, dR), R) = D
-        if dL == dR == RB.dO: inorder.append(k)
+        (_, L, k, R) = D
+        if RB.empty(L) and RB.empty(R): inorder.append(k)
         _set(L)
         _set(R)
     _set(D)
@@ -97,7 +87,7 @@ class RedBlackTest(unittest.TestCase):
         D = ()
         RB = self.RB
         H = RB.H
-        d0 = RB.digest(D)
+        d0 = RB.E
         values = range(32)
         random.shuffle(values)
         for v in values:
@@ -119,7 +109,7 @@ class RedBlackTest(unittest.TestCase):
             T = RecordTraversal(H, D)
             D = T.reconstruct(T.insert(v))
 
-        d0 = RB.digest(D)
+        d0 = RB.E
         random.shuffle(values)
         for v in values:
             T = RecordTraversal(H, D)
@@ -131,10 +121,9 @@ class RedBlackTest(unittest.TestCase):
             d0 = d
 
     def test_degenerate(self):
-        digest = self.RB.digest
         search = self.RB.search
         insert = self.RB.insert
-        dO = digest(())
+        dO = self.RB.E
         assert insert('a', ()) == ('B', (), (('a',''), dO, dO), ())
         self.assertRaises(ValueError, search, '', ())
         assert digest(()) == hash(())
