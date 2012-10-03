@@ -289,15 +289,14 @@ class RedBlack(object):
         return E if empty(d) else store(*blacken(get(d)))
 
 
-    def preorder_traversal(self, D):
+    def preorder_traversal(self, d0):
         def _recons(d0):
-            if d0 == self.dO: return ()
-            if d0 in self.d: return self.d[d0]
-            if d0 in self.cache:
-                (c, dL, k, dR) = self.cache[d0]
-                return (c, _recons(dL), (k, dL, dR), _recons(dR))
+            if d0 == self.E: return
+            (c, dL, k, dR) = self.get(d0)
+            yield c, k
+            for L in _recons(dL): yield L
+            for R in _recons(dR): yield R
         return _recons(d0)
-
 
 
 class MerkleRedBlack(RedBlack):
@@ -358,16 +357,19 @@ class HashTableRB(RedBlack):
 
 
 class RecordTraversal(MerkleRedBlack):
-    def __init__(self, H=hash, E=()):
+    def __init__(self, H=hash, E=(), emit=None):
         """Record a stream of "gets" from a passthrough tree
         """
         super(RecordTraversal,self).__init__(H, E)
-        self.VO = []
+        if emit is None:
+            self.VO = []
+            emit = self.VO.append
+        self.emit = emit
 
     def get(self, (_,D)):
         c, (dL,_), k, (dR,_) = D
         #print 'Record:', (c, dL, k, dR)
-        self.VO.append((c, dL, k, dR))
+        self.emit((c, dL, k, dR))
         return D
 
 

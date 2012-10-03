@@ -3,7 +3,7 @@ import random
 from Crypto.Hash import SHA256
 import json
 import redblack; reload(redblack)
-from redblack import RedBlack
+from redblack import RedBlack, MerkleRedBlack
 from redblack import RecordTraversal, ReplayTraversal
 
 
@@ -83,50 +83,12 @@ class RedBlackTest(unittest.TestCase):
             invariants(self.RB, D)
             assert v != search(v, D)[0]
 
-    def test_traversal_insert(self):
-        D = ()
-        RB = self.RB
-        H = RB.H
-        d0 = RB.E
-        values = range(32)
-        random.shuffle(values)
-        for v in values:
-            T = RecordTraversal(H, D)
-            d = T.insert(v)
-            D = T.reconstruct(d)
-            invariants(RB, D)
-            R = ReplayTraversal(H, d0, T.VO)
-            assert R.insert(v) == d
-            d0 = d
-            
-    def test_traversal_delete(self):
-        D = ()
-        RB = self.RB
-        H = RB.H
-        values = range(32)
-        random.shuffle(values)
-        for v in values:
-            T = RecordTraversal(H, D)
-            D = T.reconstruct(T.insert(v))
-
-        d0 = RB.E
-        random.shuffle(values)
-        for v in values:
-            T = RecordTraversal(H, D)
-            d = T.delete(v)
-            D = T.reconstruct(d)
-            invariants(RB, D)
-            R = ReplayTraversal(H, d0, T.VO)
-            assert R.delete(v) == d
-            d0 = d
-
     def test_degenerate(self):
         search = self.RB.search
         insert = self.RB.insert
         dO = self.RB.E
-        assert insert('a', ()) == ('B', (), (('a',''), dO, dO), ())
+        assert insert('a', ()) == ('B', dO, ('a',''), dO)
         self.assertRaises(ValueError, search, '', ())
-        assert digest(()) == hash(())
 
     def test_insert_random(self, n=100):
         insert = self.RB.insert
@@ -155,6 +117,45 @@ class RedBlackTest(unittest.TestCase):
                 invariants(self.RB, D)
                 ref.remove((i,chr(i)))
                 assert inorder_traversal(self.RB, D) == sorted(ref)
+
+
+class MerkleRedBlackTest(unittest.TestCase):
+    def setUp(self):
+        self.RB = MerkleRedBlack()
+
+    def test_traversal_insert(self):
+        RB = self.RB
+        D = RB.E
+        H = RB.H
+        d0 = D[0]
+        values = range(32)
+        random.shuffle(values)
+        for v in values:
+            T = RecordTraversal(H)
+            D = T.insert(v,D)
+            #invariants(RB, D)
+            R = ReplayTraversal(T.VO, H)
+            assert R.insert(v, d0) == D[0]
+            d0 = D[0]
+            
+    def test_traversal_delete(self):
+        RB = self.RB
+        D = RB.E
+        H = RB.H
+        values = range(32)
+        random.shuffle(values)
+        for v in values:
+            D = RecordTraversal(H).insert(v, D)
+
+        d0 = D[0]
+        random.shuffle(values)
+        for v in values:
+            T = RecordTraversal(H)
+            D = T.delete(v, D)
+            #invariants(RB, D)
+            R = ReplayTraversal(T.VO, H)
+            assert R.delete(v, d0) == D[0]
+            d0 = D[0]
 
 if __name__ == '__main__':
     unittest.main()
