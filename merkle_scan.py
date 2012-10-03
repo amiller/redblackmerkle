@@ -3,6 +3,7 @@ import itertools
 from itertools import imap, chain
 from binascii import hexlify
 from Crypto.Hash import SHA256
+from functools import partial
 
 from bitcointools.deserialize import parse_Block, parse_BlockHeader, parse_Transaction
 from bitcointools.block import scan_blocks, _open_blkindex, read_block
@@ -13,7 +14,7 @@ import struct
 
 import redblack
 reload(redblack)
-from redblack import MerkleRedBlack, HashTableRB
+from redblack import MerkleRedBlack, HashTableRB, RedBlack
 
 import utxo_merkle
 reload(utxo_merkle)
@@ -74,41 +75,43 @@ def transactions_in_block(block_data):
 transactions_in_order = lambda: chain.from_iterable(imap(transactions_in_block,
                                                          blocks_in_order()))
 
+def ireduce(func, iterable, init=None):
+    if init is None:
+        iterable = iter(iterable)
+        curr = iterable.next()
+    else:
+        curr = init
+    for x in iterable:
+        curr = func(curr, x)
+        yield curr
 
-def apply_transaction(RB, D, (nHeight, tx_id, txn)):
-    # Remove all the spent txins
+def apply_update(RB, D, update):
+    cmd, item = update
+    if cmd == 'delete': 
+        key = item
+        return RB.delete(key, D)
+    if cmd == 'insert':
+        key, value = item
+        try:
+            return RB.insert(key, D, value)
+        except DuplicateElementError as e:
+            return D # Ignore duplicate elements (relevant prior to BIP30)
+
+def updates_in_transaction(nHeight, tx_id, txn):
     #print 'Applying txn:', hexlify(tx_id[::-1])
+    # Remove all the spent txins
     for txin in txn['txIn']:
         prevout_hash = txin['prevout_hash']
         prevout_n = txin['prevout_n']
-
         if prevout_hash == genesis: continue # Ignore coinbase txns
-
         key = ("UTXO", prevout_hash, prevout_n)
-
-        if 0:
-            (_,utxo) = RB.search(key, D)
-            serial = struct.pack("<4s32sI32s", "UTXO", tx_id, prevout_n, utxo)
-            print json.dumps(["delete", hexlify(serial)])
-
-        D = RB.delete(key, D)
-        #print 'Deleted: ', ("TXID", hexlify(prevout_hash[::-1]), prevout_n)
+        yield ('delete', key)
 
     # Insert all the new txouts
     for idx,txout in enumerate(txn['txOut']):
-        try:
-            v = utxo_hash(idx==0, nHeight, txout['value'], txout['scriptPubKey'])
-            D = RB.insert(("UTXO", tx_id, idx), D, v)
-
-            if 0:
-                serial = struct.pack("<4s32sI32s", "UTXO", tx_id, idx, v)
-                print json.dumps(["insert", hexlify(serial)])
-
-        except DuplicateElementError as e:
-            pass # Ignore duplicate elements (relevant prior to BIP30)
-        #print 'Inserted: ', ("TXID", hexlify(tx_id[::-1]), idx)
-
-    return D
+        value = utxo_hash(idx==0, nHeight, txout['value'], txout['scriptPubKey'])
+        key = ("UTXO", tx_id, idx)
+        yield ('insert', (key, value))
 
 
 import numpy as np
@@ -128,12 +131,16 @@ class LevelDict(object):
     def __setitem__(self, k, v):
         self.db.Put(k, pickle.dumps(v,-1))
 
+def accumulate_tree(D, txn):
+    pass
+    
+
 from binascii import unhexlify
 def main():
     # Start with an empty_tree
     global MerkleTree, Trees
-    RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
-
+    #RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
+    RB = MerkleRedBlack(MerkleNodeDigest)
     #start = 226274; MerkleTree = unhexlify("8f19e9e653edbe752e346585bfbe10711ff372f9810e96df4c2fc9d306452bb1")
     #start = 216573; MerkleTree = unhexlify("ac3b14a1a4295ce58b27d5eb6925364ec5f75e39ad0fc4a211fb76895776dc42")
     #start = 175005; MerkleTree = unhexlify("e4ca15dd2b5f8063e340ed884924a9355719fb341a7a4bdc513d173ab609ec0b")
@@ -149,12 +156,47 @@ def main():
     utxo_size = 0
     txouts = 0
     for i,(nHeight,tx_id,txn) in enumerate(txs):
-        RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
+        #RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
+        RB = MerkleRedBlack(MerkleNodeDigest)
         if i <= start: continue
-        MerkleTree = apply_transaction(RB, MerkleTree, (nHeight,tx_id,txn))
+        MerkleTree = reduce(partial(apply_update, RB),
+                            updates_in_transaction(nHeight,tx_id,txn), MerkleTree)
         #utxo_size += len(txn['txOut']) - len([1 for txin in txn['txIn'] if txin['prevout_hash'] != genesis])
         #txouts += len(txn['txOut'])
-        Trees.append(MerkleTree)
-        print i, hexlify(MerkleTree)
+        #Trees.append(MerkleTree)
+        print i, hexlify(MerkleTree[0])
         #if nHeight >= 200000: break
-        if nHeight >= 1000: break
+        if nHeight >= 1532: break
+    print hash(tuple(RB.preorder_traversal(MerkleTree)))
+
+
+def main2(stop=1532):
+    # Run through the blockchain, updating a redblack tree of UTXO keys (no hashes, no values)
+    global MerkleTree
+    RB = RedBlack()
+    start = -1; MerkleTree = RB.E
+    txs = transactions_in_order()
+    for i,(nHeight,tx_id,txn) in enumerate(txs):
+        if i <= start: continue
+        MerkleTree = reduce(partial(apply_update, RB),
+                            updates_in_transaction(nHeight,tx_id,txn), MerkleTree)
+        print nHeight, i
+        if stop is not None and nHeight >= stop: break
+    print hash(tuple(RB.preorder_traversal(MerkleTree)))
+
+def main3():
+    global MerkleTree
+    RB = RedBlack()
+    start = -1; MerkleTree = RB.E
+    txs = transactions_in_order()
+    for i,(nHeight,tx_id,txn) in enumerate(txs):
+        if i <= start: continue
+        MerkleTree = reduce(partial(apply_update, RB),
+                            updates_in_transaction(nHeight,tx_id,txn), MerkleTree)
+        print nHeight, i
+        if nHeight >= stop: break
+    print hash(tuple(RB.preorder_traversal(MerkleTree)))
+
+class AppendOnlyFile(object):
+    def __init__(self, path):
+        self._writer = open(path, 'a+b')
