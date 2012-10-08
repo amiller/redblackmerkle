@@ -1,6 +1,59 @@
+/*
+
+llrb.hpp
+Andrew Miller <amiller@cs.ucf.edu> <amiller@dappervision.com>
+October 2012
+
+A generic implementation of Left-Leaning RedBlack Trees [1,2]. 
+
+Unlike in most RedBlack tree implementations [3,4], the 
+tree structure itself is not assumed to reside in memory, and the edges
+are not assumed to be pointers. Instead, the LLRB-tree operations are 
+defined as traversals over a "Zipper" [5] machine, which exposes a few 
+instructions for traversing and modifying a local context within a tree.
+
+Specializations include:
+
+1. Default/identity: an ordinary pointer-based tree in memory 
+   (see c_redblack_main.cpp)
+
+2. Merkle trees: the tree is augmented with hash digests stored
+   at each node.
+
+3. Merkle validation: the tree does not reside in memory, but
+   instead the operations are "simulated" using an (untrusted)
+   Verification Object (a sequence of data containing just the
+   nodes visited, in order)
+
+
+[1] Left-Leaning Red Black Trees. 
+Robert Sedgewick
+http://www.cs.princeton.edu/~rs/talks/LLRB/RedBlack.pdf
+http://www.cs.princeton.edu/~rs/talks/LLRB/LLRB.pdf
+
+[2] Purely Functional Left-Leaning Red Black Trees
+Kazu Yamamoto. 2011
+http://www.mew.org/~kazu/proj/red-black-tree/
+
+[3] sys/tree.h  (in BSD standard lib)
+Niels Provos. 2002. 
+http://fxr.watson.org/fxr/source/sys/tree.h
+
+[4] rb.h
+Jason Evans. 2010
+http://www.canonware.com/rb/
+
+[5] Functional Pearl: The Zipper
+Gerard Huet. 1996
+http://www.st.cs.uni-saarland.de/edu/seminare/2005/advanced-fp/docs/huet-zipper.pdf
+
+*/
+
+
 #include <vector>
 #include <ostream>
 #include <boost/optional/optional.hpp>
+
 
 namespace rbm {
 
