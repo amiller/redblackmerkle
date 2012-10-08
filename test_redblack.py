@@ -5,9 +5,9 @@ import json
 import redblack; reload(redblack)
 from redblack import RedBlack, MerkleRedBlack
 from redblack import RecordTraversal, ReplayTraversal
+from redblack import RedBlackZipper, RedBlackMixin
 
-
-def invariants(RB, D):
+def invariants(D, leftleaning=False):
     # The following invariants hold at all times for the red-black search tree
 
     # Our definition of a search tree: each inner node contains the largest
@@ -24,6 +24,14 @@ def invariants(RB, D):
             if v == (): print D
             assert v != ()
             return k
+
+    # No red node has a red parent
+    def _noredchild(D, right=False):
+        if not D: return
+        (c, L, _, R) = D
+        assert not (right and c=='R')
+        _noredchild(L)
+        _noredchild(R, True)
 
     # No red node has a red parent
     def _redparent(D, parent_is_red=False):
@@ -48,7 +56,7 @@ def invariants(RB, D):
     _greatest(D)
     _redparent(D)
     _paths_black(D)
-
+    if leftleaning: _noredchild(D)
 
 def inorder_traversal(RB, D):
     inorder = []
@@ -74,13 +82,13 @@ class RedBlackTest(unittest.TestCase):
         values = range(32); random.shuffle(values)
         for v in values:
             D = insert(v, D)
-            invariants(self.RB, D)
+            invariants(D)
             assert v == search(v, D)[0]
 
         random.shuffle(values)
         for v in values[1:]:
             D = delete(v, D)
-            invariants(self.RB, D)
+            invariants(D)
             assert v != search(v, D)[0]
 
     def test_degenerate(self):
@@ -114,7 +122,7 @@ class RedBlackTest(unittest.TestCase):
             random.shuffle(values)
             for i in values:
                 D = delete(i, D)
-                invariants(self.RB, D)
+                invariants(D)
                 ref.remove((i,chr(i)))
                 assert inorder_traversal(self.RB, D) == sorted(ref)
 
@@ -133,7 +141,7 @@ class MerkleRedBlackTest(unittest.TestCase):
         for v in values:
             T = RecordTraversal(H)
             D = T.insert(v,D)
-            #invariants(RB, D)
+            #invariants(D)
             R = ReplayTraversal(T.VO, H)
             assert R.insert(v, d0) == D[0]
             d0 = D[0]
@@ -152,10 +160,39 @@ class MerkleRedBlackTest(unittest.TestCase):
         for v in values:
             T = RecordTraversal(H)
             D = T.delete(v, D)
-            #invariants(RB, D)
+            #invariants(D)
             R = ReplayTraversal(T.VO, H)
             assert R.delete(v, d0) == D[0]
             d0 = D[0]
 
 if __name__ == '__main__':
-    unittest.main()
+    #unittest.main()
+    pass
+
+class MyRedBlack(RedBlackZipper, RedBlackMixin):
+    def __repr__(self): return str(list(self.preorder_traversal()))
+
+def inorder(d): return [x[1][0] for x in d.inorder_traversal() if x[1][1] != ()]
+
+d = MyRedBlack()
+d.clear()
+vs = range(100)
+random.shuffle(vs)
+for i in vs:
+    print 'insert', i
+    d.insert(i)
+    invariants(d._focus, leftleaning=True)
+assert(inorder(d) == sorted(vs))
+
+def random_insert(n):
+    vs = range(n)
+    random.shuffle(vs)
+    d = MyRedBlack()
+    for v in vs: d.insert(v)
+
+def random_insert_rb(n):
+    vs = range(n)
+    random.shuffle(vs)
+    RB = RedBlack()
+    D = RB.E
+    for v in vs: D = RB.insert(v, D)

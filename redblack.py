@@ -119,6 +119,224 @@ class DuplicateElementError(ValueError):
     pass
 
 from itertools import izip
+import collections
+from functools import partial
+
+class peekable:
+    """An iterator that supports a peek operation.
+    """
+    def __init__(self, iterable):
+        self._iterable = iter(iterable)
+        self._cache = collections.deque()
+        
+    def __iter__(self):
+        return self
+
+    def _fillcache(self, n):
+        while len(self._cache) < n:
+            self._cache.append(self._iterable.next())
+    
+    def next(self, n=None):
+        self._fillcache(n is None and 1 or n)
+        if n is None:
+            result = self._cache.popleft()
+        else:
+            result = [self._cache.popleft() for i in range(n)]
+        return result
+
+    def peek(self, n=None):
+        self._fillcache(n is None and 1 or n)
+        if n is None:
+            result = self._cache[0]
+        else:
+            result = [self._cache[i] for i in range(n)]
+        return result
+
+class RedBlackZipper(object):
+
+    def __init__(self, D=()):
+        self._path = []
+        self._stack = []
+        self._focus = D
+        self.E = ()
+
+    # Focus on one of the children
+    def down(self, LR):
+        """
+        args: 'L' or 'R'
+        precondition: current focus is not empty
+        effect: pushes the current focus on the stack, moves focus to child
+        returns: () if node is empty
+        """
+        assert LR in ('L','R')
+        assert not self.empty()
+        self._path.append((LR, self._focus))
+        if LR == 'L': self._focus = self._focus[1]
+        if LR == 'R': self._focus = self._focus[3]
+
+    def left(self):
+        self._path.append(('L', self._focus))
+        self._focus = self._focus[1]
+
+    def right(self):
+        self._path.append(('R', self._focus))
+        self._focus = self._focus[3]
+
+    # Focus on the parent
+    def up(self):
+        (LR, (c, L, k, R)) = self._path.pop()
+        if LR == 'L': self._focus = (c, self._focus, k, R)
+        elif LR == 'R': self._focus = (c, L, k, self._focus)
+        else: raise ValueError
+
+    def empty(self): return self._focus == self.E
+    def color(self): return self._focus[0]
+    def isRed(self): return self._focus != self.E and self._focus[0] == 'R'
+
+    def visit(self):
+        assert not self.empty()
+        return self._focus[0], self._focus[2]
+
+    # Modify the current focus
+    def clear(self): self._focus = self.E
+    def leaf(self, c, k): self._focus = (c, self.E, k, self.E)
+    def modify(self, c, k): self._focus = (c, self._focus[1], k, self._focus[3])
+
+    # Use a stack to rearrange nodes
+    def push(self):
+        self._stack.append(self._focus)
+        self.clear()
+    def pop(self): 
+        self.clear()
+        self._focus = self._stack.pop()
+    def swap(self):
+        a = self._stack.pop()
+        b = self._stack.pop()
+        self._stack.append(a)
+        self._stack.append(b)
+
+class RedBlackMixin():
+
+    def colorFlip(self):
+        # Flips the colors of the focus and both children
+        #print 'colorflip'
+        def flip(): self.setColor('R' if self.color() == 'B' else 'B')
+        self.left(); flip(); self.up();
+        self.right(); flip(); self.up()
+        flip()
+
+    def rotate(self, left, right):
+        up, push, pop = self.up, self.push, self.pop
+        color, setColor = self.color, self.setColor
+
+        # rotateRight (for rotateLeft, swap left/right)
+        #    A            B 
+        #  B   z   ==>  x   A
+        # x y              y z
+
+        left(); right(); push();              # y
+        up(); push();                         # B
+        up(); c = color(); push();            # A
+        self.swap();
+        pop(); setColor(c);                   # B
+        right(); pop(); setColor('R')         # A
+        left(); pop();                        # y
+        up(); up();
+
+    def moveRedRight(self):
+        self.colorFlip()
+        if self.inRight(self.isRed):
+            self.inRight(self.rotateRight)
+            self.rotateLeft(); self.colorFlip();
+
+    def rotateRight(self): self.rotate(self.left, self.right)
+    def rotateLeft(self): self.rotate(self.right, self.left)
+    def isRed(self): return not self.empty() and self.visit()[0] == 'R'
+    def setColor(self, c): _, k = self.visit(); self.modify(c, k)
+    def color(self): return self.visit()[0]
+    def left(self): self.down('L')
+    def right(self): self.down('R')
+
+    def inChild(self, down, f):
+        down()
+        try: return f()
+        finally: self.up()
+
+    def inLeft(self, f): return self.inChild(self.left, f)
+    def inRight(self, f): return self.inChild(self.right, f)
+
+    def insert(self, q, v=''):
+        self._ins(q, v)
+        self.setColor('B')
+
+    def _ins(self, q, v):
+        isRed, empty, leaf = self.isRed, self.empty, self.leaf
+        inLeft, inRight, colorFlip = self.inLeft, self.inRight, self.colorFlip
+        rotateLeft, rotateRight = self.rotateLeft, self.rotateRight
+        left, right, up, _ins = self.left, self.right, self.up, self._ins
+        push, pop, modify = self.push, self.pop, self.modify
+
+        if empty(): return leaf('B', (q,v))
+
+        _, k = self.visit(); kk = k[0]
+        if q == k[0]: raise DuplicateElementError()
+
+        elif q < kk and inLeft(empty):            
+            push(); leaf('R', (q,()));
+            inRight(pop);
+            inLeft(lambda: _ins(q,v));
+
+        elif q > kk and inRight(empty):
+            push(); leaf('R', (kk,()));
+            inLeft(pop);
+            inRight(lambda: _ins(q, v));
+            
+        elif q < kk: inLeft(lambda: _ins(q, v))
+        elif q > kk: inRight(lambda: _ins(q, v))
+
+        if inRight(isRed): rotateLeft()
+        if inLeft(lambda: isRed() and inLeft(isRed)): rotateRight() 
+        if inLeft(isRed) and inRight(isRed): colorFlip()
+            
+    def inorder_traversal(self, emit=None):
+        if emit is None: out = []; self.inorder_traversal(out.append); return out
+        if self.empty(): return
+        self.inLeft(lambda: self.inorder_traversal(emit))
+        emit(self.visit())
+        self.inRight(lambda: self.inorder_traversal(emit))
+
+    def preorder_traversal(self):
+        if self.empty(): raise StopIteration
+        yield self.visit()
+        self.left()
+        for item in self.preorder_traversal(): yield item
+        self.up()
+        self.right()
+        for item in self.preorder_traversal(): yield item
+        self.up()
+
+    def from_preorder(self, trav, bound=None):
+        trav = peekable(trav)
+        assert self.empty()
+        try:
+            c, k = trav.next()
+            self.leaf(c, k)
+
+            _, _k = trav.peek()
+            if _k[0] <= k[0]:
+                self.left()
+                self.from_preorder(trav, k)
+                self.up()
+                _, _k = trav.peek()
+
+            if bound is None or _k[0] <= bound:
+                self.right()
+                self.from_preorder(trav, bound)
+                self.up()
+
+        except StopIteration: return
+
+
 
 class RedBlack(object):
     def __init__(self, E=()):
@@ -304,7 +522,7 @@ class MerkleRedBlack(RedBlack):
     """
     def __init__(self, H=hash, E=()):
         self.H = H
-        super(MerkleRedBlack,self).__init__((E,()))
+        super(MerkleRedBlack,self).__init__(((),E))
 
     def store(self, c, (dL,L), k, (dR,R)):
         return (self.H((c, dL, k, dR)), (c, (dL,L), k, (dR,R)))
@@ -355,7 +573,7 @@ class HashTableRB(RedBlack):
                 else: raise
         return _recons(digest)
 
-
+from binascii import hexlify
 class RecordTraversal(MerkleRedBlack):
     def __init__(self, H=hash, E=(), emit=None):
         """Record a stream of "gets" from a passthrough tree
@@ -368,9 +586,30 @@ class RecordTraversal(MerkleRedBlack):
 
     def get(self, (_,D)):
         c, (dL,_), k, (dR,_) = D
-        #print 'Record:', (c, dL, k, dR)
         self.emit((c, dL, k, dR))
         return D
+
+class InstrumentTraversal(RecordTraversal):
+    def __init__(self, *args, **kwargs):
+        super(InstrumentTraversal,self).__init__(*args, **kwargs)
+        self.get_count = 0
+        self.put_count = 0
+        self.get_set = set()
+        self.put_set = set()
+
+    def store(self, c, L, k, R):
+        print 'Put:', self.put_count, hash((c, L, k, R))
+        self.put_set.add((c,L[0],k,R[0]))
+        self.put_count += 1
+        return super(InstrumentTraversal,self).store(c, L, k, R)
+
+    def get(self, (d0,D)):
+        print 'Get:', self.get_count, hash((c, dL, k, dR))
+        self.get_set.add((c,dL,k,dR))
+        self.get_count += 1
+        print 'Record:', (c, dL, k, dR)
+        return super(InstrumentTraversal,self).store((d0,D)) 
+
 
 
 class ReplayTraversal(HashTableRB):
