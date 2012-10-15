@@ -21,6 +21,10 @@ reload(utxo_merkle)
 from utxo_merkle import genesis, DuplicateElementError, utxo_hash, MerkleNodeDigest
 
 import json
+import cPickle as pickle
+import numpy as np
+import leveldb
+from binascii import unhexlify
 
 #import leveldb_traversal
 #reload(leveldb_traversal)
@@ -41,6 +45,11 @@ def blocks_in_order():
 
     global hash_cache
     if not 'hash_cache' in globals():
+        try:
+            with open('hash_cache.pkl','r') as f: hash_cache = pickle.load(f)
+        except IOError: pass
+
+    if not 'hash_cache' in globals():
         hash_cache = []
     
         def scan_callback(block_data):
@@ -48,6 +57,8 @@ def blocks_in_order():
             return not block_data['nHeight'] == 0
 
         scan_blocks(db_dir, db_env, scan_callback)
+
+        with open('hash_cache.pkl','w') as f: pickle.dump(hash_cache, f)
 
     cursor = db.cursor()
     for h in hash_cache[::-1]:
@@ -113,11 +124,6 @@ def updates_in_transaction(nHeight, tx_id, txn):
         key = ("UTXO", tx_id, idx)
         yield ('insert', (key, value))
 
-
-import numpy as np
-import leveldb
-import cPickle as pickle
-
 if not 'hashtable' in globals():
     hashtable = leveldb.LevelDB('./bitcoin/bitcoin_hashtable')
 
@@ -134,7 +140,10 @@ class LevelDict(object):
 def accumulate_tree(D, txn):
     pass
 
-from binascii import unhexlify
+def serialize_key(k):
+    assert k[0] in ("UTXO",)
+    return ':'.join(map(str, k))
+
 def main():
     # Start with an empty_tree
     global MerkleTree, Trees
@@ -165,14 +174,37 @@ def main():
         #Trees.append(MerkleTree)
         print i, hexlify(MerkleTree[0])
         #if nHeight >= 200000: break
-        #if nHeight >= 1532: break
-    print hash(tuple(RB.preorder_traversal(MerkleTree)))
+        if nHeight >= 1000: break
+    #print hash(tuple(RB.preorder_traversal(MerkleTree)))
 
+
+class CounterRedBlack(RedBlack):
+    """Pass-through context (Identity)
+    """
+    def __init__(self, E=(), emit=None):
+        self.get_count = 0
+        self.put_count = 0
+        if emit is None:
+            self.VO = []
+            emit = self.VO.append
+        self.emit = emit
+        super(CounterRedBlack,self).__init__(((),E))
+
+    def store(self, c, (dL,L), k, (dR,R)):
+        self.put_count += 1
+        return ((self.get_count, self.put_count-1), (c, (dL,L), k, (dR,R)))
+
+    def get(self, ((get_count, put_count),D)):
+        print 'put:', put_count, 'get:', self.get_count, 'diff:', self.get_count - get_count
+        self.emit((self.get_count, put_count, self.get_count-get_count))
+        self.get_count += 1
+        return D
 
 def main2(stop=1532):
     # Run through the blockchain, updating a redblack tree of UTXO keys (no hashes, no values)
-    global MerkleTree
-    RB = RedBlack()
+    global MerkleTree, RB
+    #RB = RedBlack()
+    RB = CounterRedBlack()
     start = -1; MerkleTree = RB.E
     txs = transactions_in_order()
     for i,(nHeight,tx_id,txn) in enumerate(txs):
@@ -180,7 +212,7 @@ def main2(stop=1532):
         MerkleTree = reduce(partial(apply_update, RB),
                             updates_in_transaction(nHeight,tx_id,txn), MerkleTree)
         print nHeight, i
-        #if stop is not None and nHeight >= stop: break
+        if nHeight >= stop: break
     print hash(tuple(RB.preorder_traversal(MerkleTree)))
 
 def main3():
@@ -197,9 +229,9 @@ def main3():
     print hash(tuple(RB.preorder_traversal(MerkleTree)))
 
 import cPickle as pickle
-def main4():
+def demo_record():
     # Start with an empty_tree
-    global MerkleTree, Trees
+    global MerkleTree, Trees, RB
     #RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
     RB = MerkleRedBlack(MerkleNodeDigest)
     start = -1; MerkleTree = RB.E
@@ -209,18 +241,19 @@ def main4():
     Trees = []
     utxo_size = 0
     txouts = 0
-
+    RB = RecordTraversal(MerkleNodeDigest)
     with open('testdb/vofile.json','w') as vofile:
       for i,(nHeight,tx_id,txn) in enumerate(txs):
         if i <= start: continue
+        RB = RecordTraversal(MerkleNodeDigest)
         #RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
         #RB = MerkleRedBlack(MerkleNodeDigest)
-        RB = RecordTraversal(MerkleNodeDigest)
         MerkleTree = reduce(partial(apply_update, RB),
                             updates_in_transaction(nHeight,tx_id,txn), MerkleTree)
-        vo = pickle.dumps(RB.VO)
-        vofile.write(vo)
-        print nHeight, i, len(vo), hexlify(MerkleTree[0])
+        #vo = pickle.dumps(RB.VO)
+        #vofile.write(vo)
+        print nHeight, i, hexlify(MerkleTree[0])
+        if nHeight > 0x100000: break
 
 def perturb(vo):
     while True:
@@ -238,11 +271,10 @@ def perturb(vo):
 
 def demo_replay():
     RB = HashTableRB(MerkleNodeDigest)
-    start = -1; MerkleTree = RB.E
+    MerkleTree = RB.E
     txs = transactions_in_order()
-    with open('./vofile_247338.json','r') as vofile:
+    with open('./testdb/vofile_132267.json','r') as vofile:
       for i,(nHeight,tx_id,txn) in enumerate(txs):
-        if i <= start: continue
         #RB = HashTableRB(MerkleNodeDigest, table=LevelDict(hashtable), validate=True)
         #RB = MerkleRedBlack(MerkleNodeDigest)
         vo = pickle.load(vofile)
@@ -252,7 +284,7 @@ def demo_replay():
         MerkleTree = reduce(partial(apply_update, RB),
                             updates_in_transaction(nHeight,tx_id,txn), MerkleTree)
         print nHeight, i, len(vo), hexlify(MerkleTree)
-        if nHeight > 60000: break
+        if nHeight > 1532: break
 
 
 class AppendOnlyFile(object):

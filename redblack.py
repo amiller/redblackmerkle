@@ -243,17 +243,13 @@ class RedBlackMixin():
         left(); pop();                        # y
         up(); up();
 
-    def moveRedRight(self):
-        self.colorFlip()
-        if self.inRight(self.isRed):
-            self.inRight(self.rotateRight)
-            self.rotateLeft(); self.colorFlip();
-
     def rotateRight(self): self.rotate(self.left, self.right)
     def rotateLeft(self): self.rotate(self.right, self.left)
     def isRed(self): return not self.empty() and self.visit()[0] == 'R'
-    def setColor(self, c): _, k = self.visit(); self.modify(c, k)
+    def setColor(self, c): _, kv = self.visit(); self.modify(c, kv)
     def color(self): return self.visit()[0]
+    def key(self): return self.visit()[1][0]
+    def setKey(self, k): c, (_, v) = self.visit(); self.modify(c, (k,v))
     def left(self): self.down('L')
     def right(self): self.down('R')
 
@@ -265,16 +261,107 @@ class RedBlackMixin():
     def inLeft(self, f): return self.inChild(self.left, f)
     def inRight(self, f): return self.inChild(self.right, f)
 
+    def fixUp(self):
+        if self.inRight(self.isRed): 
+            self.rotateLeft()
+        if self.inLeft(lambda: self.isRed() and self.inLeft(self.isRed)):
+            self.rotateRight()
+        if self.inLeft(self.isRed) and self.inRight(self.isRed): 
+            self.colorFlip()
+
+    def moveRedRight(self):
+        self.colorFlip()
+        if self.inLeft(lambda: self.inLeft(self.isRed)):
+            self.rotateRight()
+            self.colorFlip()
+
+    def moveRedLeft(self):
+        self.colorFlip()
+        if self.inRight(lambda: self.inLeft(self.isRed)):
+            self.inRight(self.rotateRight)
+            self.rotateLeft()
+            self.colorFlip()
+
+    def delete_min(self):
+        self._del_min()
+        if not self.empty(): self.setColor('B')
+
+    def _del_min(self):
+        isRed, empty, leaf = self.isRed, self.empty, self.leaf
+        inLeft, inRight = self.inLeft, self.inRight
+        push, pop, clear = self.push, self.pop, self.clear
+
+        if inLeft(empty) and inRight(empty):
+            clear()
+            return True, None
+
+        if inLeft(lambda: not isRed() and not inLeft(isRed)):
+            self.moveRedLeft()
+
+        (d, m) = inLeft(self._del_min)
+        if d: 
+            inRight(push); pop(); self.setColor('B')
+
+        self.fixUp()
+        return False, None
+
+    def delete(self, q):
+        self._del(q)
+        if not self.empty(): self.setColor('B')
+
+    def _del(self, q):
+        """
+        effect: q no longer exists in the tree in focus
+        returns:
+            (d,m) = (bool, int) 
+              where
+                d: True if a leaf was deleted (the focus is now empty)
+                m: The maximum element underneath the current focus, if it
+                   has changed (or None otherwise)
+        """
+        
+        isRed, empty, leaf = self.isRed, self.empty, self.leaf
+        inLeft, inRight = self.inLeft, self.inRight
+        push, pop, clear = self.push, self.pop, self.clear
+
+        if empty(): clear(); return False, None
+
+        kk = self.key()
+        if inLeft(empty) and inRight(empty):
+            assert kk == q, 'Element must exist to be deleted'
+            clear()
+            return True, None
+
+        newmax = None
+        if q <= kk:
+            if inLeft(lambda: not isRed() and not inLeft(isRed)):
+                 self.moveRedLeft()
+            (d, m) = inLeft(partial(self._del,q))
+            if d: 
+                inRight(push); pop(); self.setColor('B')
+            elif q == kk and m is not None:
+                self.setKey(m)
+
+        else: # q > kk
+            if inLeft(isRed): self.rotateRight()
+            if inRight(lambda: not isRed() and not inLeft(isRed)):
+                self.moveRedRight()
+            (d, newmax) = inRight(partial(self._del,q))
+            if d:
+                inLeft(push); pop(); self.setColor('B')
+                newmax = self.key()
+
+        self.fixUp()
+        return False, newmax
+
     def insert(self, q, v=''):
         self._ins(q, v)
         self.setColor('B')
 
     def _ins(self, q, v):
         isRed, empty, leaf = self.isRed, self.empty, self.leaf
-        inLeft, inRight, colorFlip = self.inLeft, self.inRight, self.colorFlip
-        rotateLeft, rotateRight = self.rotateLeft, self.rotateRight
-        left, right, up, _ins = self.left, self.right, self.up, self._ins
-        push, pop, modify = self.push, self.pop, self.modify
+        inLeft, inRight = self.inLeft, self.inRight
+        push, pop = self.push, self.pop
 
         if empty(): return leaf('B', (q,v))
 
@@ -284,20 +371,18 @@ class RedBlackMixin():
         elif q < kk and inLeft(empty):            
             push(); leaf('R', (q,()));
             inRight(pop);
-            inLeft(lambda: _ins(q,v));
+            inLeft(lambda: self._ins(q,v));
 
         elif q > kk and inRight(empty):
             push(); leaf('R', (kk,()));
             inLeft(pop);
-            inRight(lambda: _ins(q, v));
+            inRight(lambda: self._ins(q, v));
             
-        elif q < kk: inLeft(lambda: _ins(q, v))
-        elif q > kk: inRight(lambda: _ins(q, v))
+        elif q < kk: inLeft(lambda: self._ins(q, v))
+        elif q > kk: inRight(lambda: self._ins(q, v))
 
-        if inRight(isRed): rotateLeft()
-        if inLeft(lambda: isRed() and inLeft(isRed)): rotateRight() 
-        if inLeft(isRed) and inRight(isRed): colorFlip()
-            
+        self.fixUp();
+
     def inorder_traversal(self, emit=None):
         if emit is None: out = []; self.inorder_traversal(out.append); return out
         if self.empty(): return

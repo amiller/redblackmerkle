@@ -176,13 +176,25 @@ def inorder(d): return [x[1][0] for x in d.inorder_traversal() if x[1][1] != ()]
 
 d = MyRedBlack()
 d.clear()
-vs = range(100)
+vs = range(200)
 random.shuffle(vs)
 for i in vs:
-    print 'insert', i
     d.insert(i)
     invariants(d._focus, leftleaning=True)
 assert(inorder(d) == sorted(vs))
+
+
+import tree_dot
+def tree2png(D):
+    open('out.png','w').write(tree_dot.dot2png(tree_dot.tree2dot_plain(D)))
+
+tree2png(d._focus)
+if 1:
+    for i in vs:
+        # d.delete_min()
+        d.delete(i)
+        invariants(d._focus, leftleaning=True)
+    assert(inorder(d) == [])
 
 def random_insert(n):
     vs = range(n)
