@@ -1,69 +1,30 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-
 module RedBlack where
 
-import Control.Monad.State
+data Color = B | R deriving (Eq,Show,Read)
+data RBP k = Leaf | T Color !(RBP k) k !(RBP k) deriving (Show,Eq,Read)
 
-data Color = Red | Black deriving (Show, Eq)
-data Child = L | R deriving (Show, Eq)
-data Visit k v = Visit (Color, k, Maybe v) deriving (Show, Eq)
+balanceL (T B (T R (T R a x b) y c) z d) = (T R (T B a x b) y (T B c z d))
+balanceL (T B (T R a x (T R b y c)) z d) = (T R (T B a x b) y (T B c z d))
+balanceL t = t
 
-class RedBlackMonad k v m where
-  visit :: m (Visit k v)
-  update :: Maybe (Visit k v) -> m ()
-  empty :: m Bool
-  down :: Child -> m ()
-  up :: m ()
-  -- push :: m ()
-  -- pop :: m ()
-  -- swap :: m ()
+balanceR (T B a x (T R (T R b y c) z d)) = (T R (T B a x b) y (T B c z d))
+balanceR (T B a x (T R b y (T R c z d))) = (T R (T B a x b) y (T B c z d))
+balanceR t = t
 
--- 1. RedBlackMonad instance using a Zipper and a Tree
+turnB Leaf = Leaf
+turnB (T _ l k r) = T B l k r
 
-data Tree a = Leaf | Branch (Tree a) a (Tree a) deriving Show
-data RedBlackZipper a = Root (Tree a) | Hole (RedBlackZipper a) Child (Tree a) deriving Show
+leaf k = T B Leaf k Leaf
 
-focus :: RedBlackZipper a -> Tree a
-focus (Root t) = t
-focus (Hole _ _ t) = t
+insert q Leaf = leaf q
+insert q t = turnB $ insert' q t
 
-setFocus :: RedBlackZipper a -> Tree a -> RedBlackZipper a
-setFocus (Root _) t = (Root t)
-setFocus (Hole c d _) t = (Hole c d t)
-  
-instance (Ord k) => RedBlackMonad k v (State (RedBlackZipper (Visit k v))) where
-  visit = get >>= return . f . focus
-    where
-      f (Branch _ v _) = v
-      
-  update mv = get >>= \x -> put $ setFocus x $ f mv $ focus x
-    where
-      f Nothing _ = Leaf
-      f (Just v) (Branch l _ r) = (Branch l v r)
-      f (Just v) Leaf = (Branch Leaf v Leaf)
+insert' :: Ord k => k -> RBP k -> RBP k
+insert' q (T _ l@Leaf k r) | q < k = (T R (leaf q) q (T B l k r))
+insert' q (T _ l k r@Leaf) | q > k = (T R (T B l k r) k (leaf q))
+insert' q (T c l k r) | q < k = balanceL (T c (insert' q l) k r)
+insert' q (T c l k r) | q > k = balanceR (T c l k (insert' q r))
+insert' q (T _ _ k _) | q == k = error "inserting duplicate"
 
-  empty = get >>= return . f . focus
-    where
-      f Leaf = True
-      f _ = False
-      
-  down c = get >>= \x -> put $ f c x $ focus x
-    where
-      f :: Child -> RedBlackZipper (Visit k v) -> Tree (Visit k v) -> RedBlackZipper (Visit k v)
-      f L z (Branch l _ _) = (Hole z L l)
-      f R z (Branch _ _ r) = (Hole z R r)
-      
-  up = return ()
-      
---  up = get >>= 
-
--- instance (Monad) HashGraphMonad domain range m where
-
--- data Cxt a = Top | Left (Cxt a) (RB k d) | Right (Tree k d) (Cxt a)
-      
---  Main.modify Nothing
-
-
+delete :: k -> RBP k -> RBP k
+delete q (T _ Leaf k Leaf) = Leaf

@@ -5,6 +5,7 @@ from binascii import hexlify
 from Crypto.Hash import SHA256
 from functools import partial
 
+from collections import defaultdict
 from bitcointools.deserialize import parse_Block, parse_BlockHeader, parse_Transaction
 from bitcointools.block import scan_blocks, _open_blkindex, read_block
 from bitcointools.util import create_env
@@ -20,6 +21,7 @@ import utxo_merkle
 reload(utxo_merkle)
 from utxo_merkle import genesis, DuplicateElementError, utxo_hash, MerkleNodeDigest
 
+import io
 import json
 import cPickle as pickle
 import numpy as np
@@ -37,6 +39,8 @@ if not 'block_datastream' in globals():
     blockfile = open(os.path.join(db_dir, "blk%04d.dat"%(1,)), "rb")
     block_datastream = BCDataStream()
     block_datastream.map_file(blockfile, 0)
+
+
 
 def blocks_in_order():
     """ Yield all the blocks in chronological order, beginning with genesis
@@ -65,11 +69,66 @@ def blocks_in_order():
         #print hexlify(h[::-1])
         yield read_block(cursor, h)
 
-def transactions_in_block(block_data):
-    #print 'Block: ', block_data['nHeight'], hexlify(block_data['hash256'][::-1])
-    block_datastream.seek_file(block_data['nBlockPos'])
-    vds = block_datastream
-    d = parse_BlockHeader(vds)
+
+global block_index
+if not 'block_index' in globals():
+    block_index = {}
+
+def height_index(block_index):
+    index = defaultdict(set)
+    for k,v in sorted((height, (sha256, fpos_start, fpos_end))
+                      for (sha256, (height, fpos_start, fpos_end))
+                      in block_index.iteritems()):
+        index[k].add(v)
+    return index
+
+def read_one_block(f, skip=None, blkhash=None):
+    if skip is not None: f.seek(skip)
+
+    from pynode.bitcoin.core import CBlock
+    from pynode.bitcoin.serialize import ser_uint256
+
+    magic = f.read(4)
+    assert magic == "\xf9\xbe\xb4\xd9"
+    version = f.read(4)
+
+    block = CBlock()
+    block.deserialize(f)
+
+    if blkhash is not None:
+        block.calc_sha256()
+        assert block.sha256 == blkhash
+
+    return block
+
+def longest_chain(height_index):
+    length = max(height_index)
+    if len(height_index[length]):
+        print 'Multiple longest chains'
+    _, (blkhash,start,end) = iter(height_index)
+
+def scan_blocks():
+    global block_index, bigfile
+    #vds = io.FileIO(os.path.join(db_dir, "blk%04d.dat"%(1,)), "rb")
+    vds = io.FileIO("/home/amiller/Downloads/bootstrap.dat", "rb")
+
+    while True:
+
+        start = vds.tell()
+        block = read_one_block(vds)
+        end = vds.tell()
+
+        assert block.hashPrevBlock in block_index or block.hashPrevBlock == 0
+        block.calc_sha256()
+
+        height = block_index[block.hashPrevBlock][0]+1 if block.hashPrevBlock else 0
+        block_index[block.sha256] = height,start,end
+
+        yield height, block
+
+def transactions_in_block(blkhash):
+    open()
+    print block_data
     nTransactions = vds.read_compact_size()
     for i in xrange(nTransactions):
         # Parse the transaction, recording the cursor position
