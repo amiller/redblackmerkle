@@ -29,3 +29,7 @@ Illustrations
 [2] http://bitcoin.org/bitcoin.pdf<br>
 [3] http://www.eecs.usma.edu/webs/people/okasaki/jfp99.ps<br>
 [4] http://cs.brown.edu/people/aris/pubs/pad.pdf<br>
+
+Licensing
+=========
+This software is released under the CRAPL license (appropriate for scientific use) and the AGPL license (appropriate for copyleft open source projects). If you would like a different or more permissive license, please contact me!
